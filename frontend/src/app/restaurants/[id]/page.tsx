@@ -8,6 +8,7 @@ import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { getRestaurantById, getRestaurantMenu } from "@/lib/api";
+import { addItemToCart } from "@/lib/cart";
 import { Restaurant, MenuItem } from "@/types/restaurant";
 
 export default function RestaurantDetailsPage() {
@@ -19,6 +20,8 @@ export default function RestaurantDetailsPage() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [addingItemId, setAddingItemId] = useState<number | null>(null);
+  const [cartToast, setCartToast] = useState<{ message: string; subtext?: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!restaurantId) return;
@@ -78,6 +81,29 @@ export default function RestaurantDetailsPage() {
       ignore = true;
     };
   }, [restaurantId]);
+
+  const handleAddToCart = async (item: MenuItem) => {
+    if (!restaurant) return;
+    setAddingItemId(item.id);
+    try {
+      const { replacedRestaurant } = await addItemToCart(restaurant.id, item.id, 1);
+      setCartToast({
+        message: `Added "${item.name}" to cart`,
+        subtext: replacedRestaurant
+          ? "Replaced items from your previous restaurant"
+          : undefined,
+      });
+      setTimeout(() => setCartToast(null), 4000);
+    } catch (err) {
+      setCartToast({
+        message: "Failed to add item to cart",
+        subtext: err instanceof Error ? err.message : "Please try again",
+      });
+      setTimeout(() => setCartToast(null), 4000);
+    } finally {
+      setAddingItemId(null);
+    }
+  };
 
   return (
     <div className="flex-1 py-10 sm:py-14">
@@ -244,13 +270,25 @@ export default function RestaurantDetailsPage() {
                         </p>
                       </div>
 
-                      <div className="pt-6 mt-4 border-t border-brand-border/60 flex items-center justify-between">
+                      <div className="pt-5 mt-4 border-t border-brand-border/60 flex items-center justify-between gap-3">
                         <span className="font-serif text-xl font-semibold text-brand-primary">
                           ₹{item.price.toFixed(2)}
                         </span>
-                        <span className="text-xs text-brand-muted">
-                          {item.available ? "Freshly cooked" : "Temporarily unavailable"}
-                        </span>
+                        {item.available ? (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            disabled={addingItemId === item.id}
+                            onClick={() => handleAddToCart(item)}
+                            className="text-xs px-3.5 h-9 font-medium"
+                          >
+                            {addingItemId === item.id ? "Adding..." : "Add to cart"}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-brand-muted font-medium py-1.5 px-2.5 bg-stone-100 rounded-md">
+                            Unavailable
+                          </span>
+                        )}
                       </div>
                     </Card>
                   ))}
@@ -260,6 +298,22 @@ export default function RestaurantDetailsPage() {
           </div>
         )}
       </Container>
+
+      {/* Cart Toast Notification */}
+      {cartToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-stone-900 text-white p-4 rounded-xl shadow-lg border border-stone-800 flex items-center justify-between gap-4">
+          <div className="text-sm font-medium">
+            <p className="text-stone-100">{cartToast.message}</p>
+            {cartToast.subtext && <p className="text-xs text-stone-400 mt-0.5">{cartToast.subtext}</p>}
+          </div>
+          <Link
+            href="/cart"
+            className="shrink-0 px-3.5 py-1.5 bg-brand-primary text-white text-xs font-medium rounded-md hover:bg-brand-primary-hover transition-colors"
+          >
+            View Cart →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

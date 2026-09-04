@@ -15,7 +15,16 @@ export function Navbar() {
           <Link href="/offers" className="hover:text-brand-fg transition-colors">Offers</Link>
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
+          <Link
+            href="/cart"
+            className="flex items-center gap-1.5 text-sm font-medium text-brand-fg hover:text-brand-primary transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+            Cart
+          </Link>
           <Link href="/login" className="text-sm font-medium text-brand-fg hover:text-brand-primary transition-colors">
             Log in
           </Link>
