@@ -3,13 +3,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Cart, CartDisplay } from "@/types/cart";
 import { Customer } from "@/types/customer";
-import { getCart, getCustomers, createOrderFromCart } from "@/lib/api";
+import { RazorpayOptions } from "@/types/razorpay";
+import {
+  getCart,
+  getCustomers,
+  createOrderFromCart,
+  createRazorpayOrder,
+  verifyPayment,
+} from "@/lib/api";
 import {
   getStoredCartId,
   fetchCartDisplay,
@@ -28,6 +36,7 @@ export default function CheckoutPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
 
   const loadCheckoutData = useCallback(async () => {
     setIsLoading(true);
@@ -129,23 +138,84 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      let finalCartId = rawCart.id;
-      if (rawCart.customerId !== selectedCustomerId) {
-        const updatedCart = await assignCartToCustomer(rawCart, selectedCustomerId);
-        finalCartId = updatedCart.id;
+      let orderIdToPay = pendingOrderId;
+
+      if (!orderIdToPay) {
+        let finalCartId = rawCart.id;
+        if (rawCart.customerId !== selectedCustomerId) {
+          const updatedCart = await assignCartToCustomer(rawCart, selectedCustomerId);
+          finalCartId = updatedCart.id;
+        }
+
+        // Create the QuickBite order
+        const order = await createOrderFromCart(finalCartId);
+        orderIdToPay = order.id;
+        setPendingOrderId(order.id);
+        clearStoredCartId(); // Clear cart immediately since backend emptied it
       }
 
-      const order = await createOrderFromCart(finalCartId);
-      clearStoredCartId();
-      router.push(`/orders/${order.id}`);
+      // Initiate Razorpay payment order
+      const paymentInit = await createRazorpayOrder(orderIdToPay);
+
+      const customer = customers.find((c) => c.id === selectedCustomerId);
+
+      const options: RazorpayOptions = {
+        key: paymentInit.razorpayKeyId,
+        amount: Math.round(paymentInit.amount * 100),
+        currency: paymentInit.currency,
+        name: "QuickBite",
+        description: `Order #${orderIdToPay}`,
+        order_id: paymentInit.razorpayOrderId,
+        prefill: {
+          name: customer?.name || "",
+          email: customer?.email || "",
+          contact: customer?.phone || "",
+        },
+        theme: {
+          color: "#C2410C", // QuickBite primary color
+        },
+        handler: async function (response: import("@/types/razorpay").RazorpayResponse) {
+          try {
+            await verifyPayment({
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+
+            router.push(`/orders/${orderIdToPay}`);
+          } catch (verifyErr) {
+            setError(
+              verifyErr instanceof Error
+                ? verifyErr.message
+                : "Payment verification failed. If money was deducted, it will be refunded."
+            );
+            setIsSubmitting(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setIsSubmitting(false);
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      
+      razorpay.on("payment.failed", function (response: import("@/types/razorpay").RazorpayErrorResponse) {
+        setError(response.error.description || "Payment failed or was cancelled.");
+        setIsSubmitting(false);
+      });
+
+      razorpay.open();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to place order. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to initiate payment. Please try again.");
       setIsSubmitting(false);
     }
   };
 
   return (
     <div className="flex-1 py-10 sm:py-16">
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       <Container>
         {/* Page Header */}
         <div className="mb-8 sm:mb-12">
@@ -467,10 +537,10 @@ export default function CheckoutPage() {
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                           />
                         </svg>
-                        Placing Order...
+                        Processing Payment...
                       </span>
                     ) : (
-                      `Place Order • ₹${cartDisplay.totalAmount.toFixed(2)}`
+                      `Place Order & Pay • ₹${cartDisplay.totalAmount.toFixed(2)}`
                     )}
                   </Button>
                   <p className="text-center text-xs text-brand-muted">

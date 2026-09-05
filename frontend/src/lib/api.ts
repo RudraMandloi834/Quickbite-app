@@ -2,6 +2,7 @@ import { Restaurant, MenuItem } from "@/types/restaurant";
 import { Cart, CartItem, CreateCartRequest, AddCartItemRequest } from "@/types/cart";
 import { Customer } from "@/types/customer";
 import { Order } from "@/types/order";
+import { Payment, PaymentInitiationResponse, PaymentVerificationRequest } from "@/types/payment";
 
 const getApiBaseUrl = (): string => {
   if (typeof window !== "undefined") {
@@ -113,3 +114,33 @@ export async function createOrderFromCart(cartId: number): Promise<Order> {
   return res.json();
 }
 
+export async function createRazorpayOrder(orderId: number): Promise<PaymentInitiationResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/payments/orders/${orderId}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`Failed to initiate payment (${res.status} ${res.statusText}): ${errorText}`);
+  }
+  return res.json();
+}
+
+export async function verifyPayment(request: PaymentVerificationRequest): Promise<Payment> {
+  const res = await fetch(`${getApiBaseUrl()}/api/payments/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`Failed to verify payment (${res.status} ${res.statusText}): ${errorText}`);
+  }
+  return res.json();
+}
