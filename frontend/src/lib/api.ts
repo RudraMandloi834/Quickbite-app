@@ -144,3 +144,25 @@ export async function verifyPayment(request: PaymentVerificationRequest): Promis
   }
   return res.json();
 }
+
+export async function getOrderById(orderId: number | string): Promise<Order> {
+  const res = await fetch(`${getApiBaseUrl()}/api/orders/${orderId}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch order (${res.status} ${res.statusText})`);
+  }
+  return res.json();
+}
+
+export async function getCustomerById(customerId: number | string): Promise<Customer> {
+  const res = await fetch(`${getApiBaseUrl()}/api/customers/${customerId}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch customer (${res.status} ${res.statusText})`);
+  }
+  return res.json();
+}
