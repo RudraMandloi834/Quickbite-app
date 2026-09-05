@@ -1,5 +1,7 @@
 import { Restaurant, MenuItem } from "@/types/restaurant";
 import { Cart, CartItem, CreateCartRequest, AddCartItemRequest } from "@/types/cart";
+import { Customer } from "@/types/customer";
+import { Order } from "@/types/order";
 
 const getApiBaseUrl = (): string => {
   if (typeof window !== "undefined") {
@@ -84,3 +86,30 @@ export async function getCart(cartId: number): Promise<Cart> {
   }
   return res.json();
 }
+
+export async function getCustomers(): Promise<Customer[]> {
+  const res = await fetch(`${getApiBaseUrl()}/api/customers`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch customers (${res.status} ${res.statusText})`);
+  }
+  return res.json();
+}
+
+export async function createOrderFromCart(cartId: number): Promise<Order> {
+  const res = await fetch(`${getApiBaseUrl()}/api/orders/from-cart/${cartId}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`Failed to place order (${res.status} ${res.statusText}): ${errorText}`);
+  }
+  return res.json();
+}
+

@@ -185,3 +185,31 @@ export async function fetchCartDisplay(cartId: number): Promise<CartDisplay | nu
     items: Array.from(consolidatedMap.values()),
   };
 }
+
+/**
+ * Assigns or updates the cart customer.
+ * If the current cart's customerId differs from targetCustomerId,
+ * recreates the cart under the new customer with all current items.
+ */
+export async function assignCartToCustomer(
+  cart: Cart,
+  customerId: number
+): Promise<Cart> {
+  if (cart.customerId === customerId) {
+    return cart;
+  }
+
+  const qtyMap = new Map<number, number>();
+  for (const item of cart.items) {
+    qtyMap.set(item.menuItemId, (qtyMap.get(item.menuItemId) || 0) + item.quantity);
+  }
+
+  const newCart = await createCart(cart.restaurantId, customerId);
+  for (const [mId, qty] of qtyMap.entries()) {
+    await addCartItem(newCart.id, mId, qty);
+  }
+
+  setStoredCartId(newCart.id);
+  return await getCart(newCart.id);
+}
+
