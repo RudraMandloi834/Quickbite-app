@@ -182,6 +182,10 @@ export default function CheckoutPage() {
               razorpaySignature: response.razorpay_signature,
             });
 
+            // Store order ID locally so it appears in "My Orders"
+            const { addStoredOrderId } = await import("@/lib/orders");
+            addStoredOrderId(orderIdToPay);
+
             router.push(`/orders/${orderIdToPay}`);
           } catch (verifyErr) {
             setError(
