@@ -1,0 +1,5 @@
+Error on page 1: URL can't contain control characters. '/napi/search/photos?query=restaurant interior&per_page=30&page=1' (found at least ' ')
+Error on page 1: HTTP Error 401: Unauthorized
+Restaurant IDs (0):
+
+Food IDs (0):

@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.web.bind.annotation.RequestParam;
+
 @RestController
 @RequestMapping("/api/restaurants")
 public class RestaurantController {
@@ -23,6 +25,25 @@ public class RestaurantController {
     @GetMapping
     public List<Restaurant> getAllRestaurants() {
         return restaurantService.getAllRestaurants();
+    }
+
+    @GetMapping("/nearby")
+    public List<NearbyRestaurantProjection> getNearbyRestaurants(
+            @RequestParam(name = "latitude", required = false) Double latitude,
+            @RequestParam(name = "longitude", required = false) Double longitude,
+            @RequestParam(name = "radiusKm", required = false) Double radiusKm) {
+        
+        if (latitude == null || latitude < -90 || latitude > 90) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or missing latitude (-90 to 90)");
+        }
+        if (longitude == null || longitude < -180 || longitude > 180) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or missing longitude (-180 to 180)");
+        }
+        if (radiusKm == null || radiusKm <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or missing radiusKm (must be > 0)");
+        }
+        
+        return restaurantService.getNearbyRestaurants(latitude, longitude, radiusKm);
     }
 
     @PostMapping

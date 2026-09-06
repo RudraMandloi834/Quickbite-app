@@ -6,14 +6,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class RestaurantDataInitializer implements CommandLineRunner {
 
-    private final RestaurantService restaurantService;
+    private final SyntheticDataGenerator syntheticDataGenerator;
 
-    public RestaurantDataInitializer(RestaurantService restaurantService) {
-        this.restaurantService = restaurantService;
+    public RestaurantDataInitializer(SyntheticDataGenerator syntheticDataGenerator) {
+        this.syntheticDataGenerator = syntheticDataGenerator;
     }
 
     @Override
     public void run(String... args) {
-        restaurantService.addSampleRestaurantsIfEmpty();
+        syntheticDataGenerator.generate();
     }
 }

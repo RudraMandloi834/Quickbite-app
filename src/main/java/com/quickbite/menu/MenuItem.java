@@ -18,6 +18,7 @@ public class MenuItem {
     private String description;
     private BigDecimal price;
     private boolean available;
+    private String imageUrl;
 
     protected MenuItem() {
     }
@@ -28,6 +29,15 @@ public class MenuItem {
         this.description = description;
         this.price = price;
         this.available = available;
+    }
+
+    public MenuItem(Long restaurantId, String name, String description, BigDecimal price, boolean available, String imageUrl) {
+        this.restaurantId = restaurantId;
+        this.name = name;
+        this.description = description;
+        this.price = price;
+        this.available = available;
+        this.imageUrl = imageUrl;
     }
 
     public Long getId() {
@@ -52,5 +62,9 @@ public class MenuItem {
 
     public boolean isAvailable() {
         return available;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
     }
 }

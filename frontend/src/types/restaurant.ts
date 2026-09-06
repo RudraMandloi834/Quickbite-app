@@ -4,6 +4,7 @@ export interface Restaurant {
   cuisine: string;
   location: string;
   rating: number;
+  coverImageUrl?: string;
 }
 
 export interface MenuItem {
@@ -13,4 +14,5 @@ export interface MenuItem {
   description: string;
   price: number;
   available: boolean;
+  imageUrl?: string;
 }

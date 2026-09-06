@@ -27,13 +27,15 @@ public class RestaurantService {
         return restaurantRepository.save(restaurant);
     }
 
-    public void addSampleRestaurantsIfEmpty() {
-        if (restaurantRepository.count() == 0) {
-            restaurantRepository.saveAll(List.of(
-                    new Restaurant("Spice Garden", "Indian", "Koramangala", 4.5),
-                    new Restaurant("Pasta House", "Italian", "Indiranagar", 4.3),
-                    new Restaurant("Sushi Express", "Japanese", "MG Road", 4.6)
-            ));
-        }
+    public List<NearbyRestaurantProjection> getNearbyRestaurants(double latitude, double longitude, double radiusKm) {
+        double latDelta = radiusKm / 111.0;
+        double lonDelta = radiusKm / (111.0 * Math.cos(Math.toRadians(latitude)));
+        
+        double minLat = latitude - latDelta;
+        double maxLat = latitude + latDelta;
+        double minLon = longitude - lonDelta;
+        double maxLon = longitude + lonDelta;
+        
+        return restaurantRepository.findNearbyRestaurants(latitude, longitude, radiusKm, minLat, maxLat, minLon, maxLon);
     }
 }

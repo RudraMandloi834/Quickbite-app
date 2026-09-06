@@ -6,6 +6,7 @@ import { Container } from "@/components/Container";
 import { Card, CardContent } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
+import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { getRestaurants } from "@/lib/api";
 import { Restaurant } from "@/types/restaurant";
 
@@ -150,11 +151,20 @@ export default function RestaurantsPage() {
                   noPadding
                   className="h-full hover:border-brand-primary/40 hover:shadow-sm transition-all duration-200"
                 >
-                  <div className="h-44 bg-stone-100 relative flex items-center justify-center overflow-hidden border-b border-brand-border/60">
-                    <div className="absolute inset-0 bg-gradient-to-t from-stone-900/10 to-transparent" />
-                    <span className="font-serif text-3xl font-semibold text-stone-300 select-none group-hover:scale-105 transition-transform duration-300">
-                      {restaurant.name.charAt(0)}
-                    </span>
+                  <div className="h-44 bg-stone-100 relative flex items-center justify-center overflow-hidden border-b border-brand-border/60 group-hover:opacity-90 transition-opacity">
+                    <ImageWithFallback
+                      src={restaurant.coverImageUrl}
+                      alt={restaurant.name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      fallbackNode={
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-t from-stone-900/10 to-transparent" />
+                          <span className="font-serif text-3xl font-semibold text-stone-300 select-none group-hover:scale-105 transition-transform duration-300">
+                            {restaurant.name.charAt(0)}
+                          </span>
+                        </>
+                      }
+                    />
                     <div className="absolute top-4 left-4">
                       <Badge variant="default" className="bg-white/90 backdrop-blur-sm shadow-xs">
                         {restaurant.cuisine}

@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/Container";
-import { Card } from "@/components/Card";
+import { Card, CardContent } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
+import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { getRestaurantById, getRestaurantMenu } from "@/lib/api";
 import { addItemToCart } from "@/lib/cart";
 import { Restaurant, MenuItem } from "@/types/restaurant";
@@ -182,40 +183,57 @@ export default function RestaurantDetailsPage() {
         {!isLoading && !error && restaurant && (
           <div className="space-y-12">
             {/* Restaurant Hero Card */}
-            <Card className="p-8 sm:p-10 bg-white shadow-xs border-brand-border/80">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Badge variant="default">{restaurant.cuisine}</Badge>
-                    <span className="flex items-center text-xs font-semibold bg-stone-100 text-stone-800 px-2.5 py-0.5 rounded-full border border-stone-200">
-                      <svg className="w-3.5 h-3.5 text-amber-500 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      {restaurant.rating.toFixed(1)} Rating
-                    </span>
-                  </div>
-
-                  <h1 className="text-3xl sm:text-5xl font-serif text-brand-fg font-medium tracking-tight">
-                    {restaurant.name}
-                  </h1>
-
-                  <div className="flex items-center text-sm text-brand-muted mt-3">
-                    <svg className="w-4 h-4 mr-1.5 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span>{restaurant.location}</span>
-                  </div>
-                </div>
-
-                <div className="flex md:flex-col items-start md:items-end gap-2 text-xs text-brand-muted border-t md:border-t-0 pt-4 md:pt-0 border-brand-border">
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
-                    Open for orders
-                  </span>
-                  <span>Delivery in 25–35 min</span>
-                </div>
+            <Card noPadding className="bg-white shadow-xs border-brand-border/80 overflow-hidden">
+              <div className="h-64 sm:h-80 w-full relative">
+                <ImageWithFallback
+                  src={restaurant.coverImageUrl}
+                  alt={restaurant.name}
+                  className="w-full h-full object-cover"
+                  fallbackNode={
+                    <div className="w-full h-full bg-stone-100 flex items-center justify-center">
+                      <span className="font-serif text-5xl font-semibold text-stone-300">
+                        {restaurant.name.charAt(0)}
+                      </span>
+                    </div>
+                  }
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-stone-900/10 to-transparent" />
               </div>
+              <CardContent className="p-8 sm:p-10">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Badge variant="default">{restaurant.cuisine}</Badge>
+                      <span className="flex items-center text-xs font-semibold bg-stone-100 text-stone-800 px-2.5 py-0.5 rounded-full border border-stone-200">
+                        <svg className="w-3.5 h-3.5 text-amber-500 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        {restaurant.rating.toFixed(1)} Rating
+                      </span>
+                    </div>
+
+                    <h1 className="text-3xl sm:text-5xl font-serif text-brand-fg font-medium tracking-tight">
+                      {restaurant.name}
+                    </h1>
+
+                    <div className="flex items-center text-sm text-brand-muted mt-3">
+                      <svg className="w-4 h-4 mr-1.5 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span>{restaurant.location}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex md:flex-col items-start md:items-end gap-2 text-xs text-brand-muted border-t md:border-t-0 pt-4 md:pt-0 border-brand-border">
+                    <span className="flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
+                      Open for orders
+                    </span>
+                    <span>Delivery in 25–35 min</span>
+                  </div>
+                </div>
+              </CardContent>
             </Card>
 
             {/* Menu Section */}
@@ -254,42 +272,59 @@ export default function RestaurantDetailsPage() {
                   {menu.map((item) => (
                     <Card
                       key={item.id}
-                      className="p-6 flex flex-col justify-between hover:border-brand-primary/30 transition-colors bg-white shadow-xs"
+                      noPadding
+                      className="flex flex-col hover:border-brand-primary/30 transition-colors bg-white shadow-xs overflow-hidden h-full"
                     >
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-start gap-4">
-                          <h3 className="font-serif text-xl font-medium text-brand-fg">
-                            {item.name}
-                          </h3>
-                          <Badge variant={item.available ? "success" : "neutral"} className="shrink-0">
-                            {item.available ? "Available" : "Sold out"}
-                          </Badge>
+                      <div className="h-48 w-full relative bg-stone-50">
+                        <ImageWithFallback
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          fallbackNode={
+                            <div className="w-full h-full flex items-center justify-center text-stone-300">
+                              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          }
+                        />
+                      </div>
+                      <CardContent className="p-6 flex flex-col flex-grow justify-between">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start gap-4">
+                            <h3 className="font-serif text-xl font-medium text-brand-fg">
+                              {item.name}
+                            </h3>
+                            <Badge variant={item.available ? "success" : "neutral"} className="shrink-0">
+                              {item.available ? "Available" : "Sold out"}
+                            </Badge>
+                          </div>
+                          <p className="text-brand-muted text-sm leading-relaxed">
+                            {item.description}
+                          </p>
                         </div>
-                        <p className="text-brand-muted text-sm leading-relaxed">
-                          {item.description}
-                        </p>
-                      </div>
 
-                      <div className="pt-5 mt-4 border-t border-brand-border/60 flex items-center justify-between gap-3">
-                        <span className="font-serif text-xl font-semibold text-brand-primary">
-                          ₹{item.price.toFixed(2)}
-                        </span>
-                        {item.available ? (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            disabled={addingItemId === item.id}
-                            onClick={() => handleAddToCart(item)}
-                            className="text-xs px-3.5 h-9 font-medium"
-                          >
-                            {addingItemId === item.id ? "Adding..." : "Add to cart"}
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-brand-muted font-medium py-1.5 px-2.5 bg-stone-100 rounded-md">
-                            Unavailable
+                        <div className="pt-5 mt-4 border-t border-brand-border/60 flex items-center justify-between gap-3">
+                          <span className="font-serif text-xl font-semibold text-brand-primary">
+                            ₹{item.price.toFixed(2)}
                           </span>
-                        )}
-                      </div>
+                          {item.available ? (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              disabled={addingItemId === item.id}
+                              onClick={() => handleAddToCart(item)}
+                              className="text-xs px-3.5 h-9 font-medium"
+                            >
+                              {addingItemId === item.id ? "Adding..." : "Add to cart"}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-brand-muted font-medium py-1.5 px-2.5 bg-stone-100 rounded-md">
+                              Unavailable
+                            </span>
+                          )}
+                        </div>
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
