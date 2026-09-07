@@ -17,6 +17,10 @@ import com.quickbite.order.OrderStatus;
 import com.razorpay.RazorpayException;
 import org.json.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import com.quickbite.security.CustomUserDetails;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -40,6 +44,8 @@ class PaymentServiceTest {
 
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            new CustomUserDetails("test@test.com", "pass", Collections.emptyList(), 1L), null));
         paymentService = new PaymentService(paymentRepository, orderRepository, razorpayClient);
     }
 

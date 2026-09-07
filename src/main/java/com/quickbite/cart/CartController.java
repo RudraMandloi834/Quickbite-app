@@ -43,6 +43,9 @@ public class CartController {
         if (request.customerId() == null || request.customerId() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer ID must be greater than 0");
         }
+        if (!request.customerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access another user's resources");
+        }
         if (request.restaurantId() == null || request.restaurantId() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Restaurant ID must be greater than 0");
         }

@@ -29,6 +29,9 @@ public class PaymentService {
     public PaymentInitiationResponse createRazorpayOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (!order.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
 
         if (order.getStatus() == OrderStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled orders cannot be paid");
@@ -97,6 +100,9 @@ public class PaymentService {
 
         Order order = orderRepository.findById(payment.getOrderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (!order.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
         
         order.confirm();
         orderRepository.save(order);
@@ -105,7 +111,12 @@ public class PaymentService {
     }
 
     public Payment getPayment(Long paymentId) {
-        return paymentRepository.findById(paymentId)
+        Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        Order order = orderRepository.findById(payment.getOrderId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (!order.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        return payment;
     }
 }

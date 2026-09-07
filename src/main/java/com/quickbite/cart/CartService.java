@@ -50,6 +50,9 @@ public class CartService {
     public CartItem addItem(Long cartId, AddCartItemRequest request) {
         Cart cart = cartRepository.findById(cartId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
+        if (!cart.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
         MenuItem menuItem = menuItemRepository.findById(request.menuItemId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Menu item not found"));
 
@@ -73,6 +76,9 @@ public class CartService {
     public Cart getCart(Long cartId) {
         Cart cart = cartRepository.findById(cartId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
+        if (!cart.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
         cart.setItems(cartItemRepository.findByCartId(cartId));
         return cart;
     }

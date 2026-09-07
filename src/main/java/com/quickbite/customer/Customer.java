@@ -6,6 +6,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 @Entity
 public class Customer {
 
@@ -17,6 +19,9 @@ public class Customer {
     @Column(unique = true)
     private String email;
     private String phone;
+    
+    @JsonIgnore
+    private String password;
 
     protected Customer() {
     }
@@ -25,6 +30,13 @@ public class Customer {
         this.name = name;
         this.email = email;
         this.phone = phone;
+    }
+    
+    public Customer(String name, String email, String phone, String password) {
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+        this.password = password;
     }
 
     public Long getId() {
@@ -41,5 +53,9 @@ public class Customer {
 
     public String getPhone() {
         return phone;
+    }
+
+    public String getPassword() {
+        return password;
     }
 }

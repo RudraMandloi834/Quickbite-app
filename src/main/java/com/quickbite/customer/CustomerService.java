@@ -28,11 +28,14 @@ public class CustomerService {
     }
 
     public Customer getCustomer(Long customerId) {
+        if (!customerId.equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
         return customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
     }
 
     public List<Customer> getAllCustomers() {
-        return customerRepository.findAll();
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
     }
 }
