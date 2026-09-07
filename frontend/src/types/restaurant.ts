@@ -5,6 +5,8 @@ export interface Restaurant {
   location: string;
   rating: number;
   coverImageUrl?: string;
+  distanceKm?: number;
+  city?: string;
 }
 
 export interface MenuItem {

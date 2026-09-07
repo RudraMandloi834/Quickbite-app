@@ -188,6 +188,7 @@ export default function RestaurantDetailsPage() {
                 <ImageWithFallback
                   src={restaurant.coverImageUrl}
                   alt={restaurant.name}
+                  priority
                   className="w-full h-full object-cover"
                   fallbackNode={
                     <div className="w-full h-full bg-stone-100 flex items-center justify-center">
@@ -269,7 +270,7 @@ export default function RestaurantDetailsPage() {
               ) : (
                 /* Menu Items Grid */
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {menu.map((item) => (
+                  {menu.map((item, index) => (
                     <Card
                       key={item.id}
                       noPadding
@@ -279,6 +280,7 @@ export default function RestaurantDetailsPage() {
                         <ImageWithFallback
                           src={item.imageUrl}
                           alt={item.name}
+                          priority={index < 4}
                           className="w-full h-full object-cover"
                           fallbackNode={
                             <div className="w-full h-full flex items-center justify-center text-stone-300">

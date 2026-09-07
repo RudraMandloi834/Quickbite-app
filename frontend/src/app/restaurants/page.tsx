@@ -7,26 +7,101 @@ import { Card, CardContent } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
-import { getRestaurants } from "@/lib/api";
+import { getRestaurants, getNearbyRestaurants } from "@/lib/api";
 import { Restaurant } from "@/types/restaurant";
 
+const formatDistance = (distanceKm?: number) => {
+  if (distanceKm === undefined) return null;
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)}m away`;
+  }
+  return `${distanceKm.toFixed(1)}km away`;
+};
+
+const CITIES = [
+  "Mumbai", "Indore", "Bengaluru", "Delhi", "Hyderabad", 
+  "Chennai", "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Chandigarh"
+];
+
 export default function RestaurantsPage() {
+  const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string>("");
 
   const fetchRestaurantsList = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await getRestaurants();
+      setAllRestaurants(data);
       setRestaurants(data);
+      setSelectedCity("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load restaurants");
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const city = e.target.value;
+    setSelectedCity(city);
+    setLocationError(null);
+    if (city === "") {
+      setRestaurants(allRestaurants);
+    } else {
+      setRestaurants(allRestaurants.filter(r => r.city === city));
+    }
+  };
+
+  const handleUseLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationError(null);
+    setSelectedCity("");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          setIsLoading(true);
+          const { latitude, longitude } = position.coords;
+          const data = await getNearbyRestaurants(latitude, longitude, 10);
+          setRestaurants(data);
+        } catch (err) {
+          setLocationError(err instanceof Error ? err.message : "Failed to load nearby restaurants");
+        } finally {
+          setIsLocating(false);
+          setIsLoading(false);
+        }
+      },
+      (err) => {
+        setIsLocating(false);
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            setLocationError("Location permission denied");
+            break;
+          case err.POSITION_UNAVAILABLE:
+            setLocationError("Location information is unavailable");
+            break;
+          case err.TIMEOUT:
+            setLocationError("The request to get user location timed out");
+            break;
+          default:
+            setLocationError("An unknown error occurred getting location");
+            break;
+        }
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -35,6 +110,7 @@ export default function RestaurantsPage() {
       try {
         const data = await getRestaurants();
         if (!ignore) {
+          setAllRestaurants(data);
           setRestaurants(data);
           setIsLoading(false);
         }
@@ -70,12 +146,64 @@ export default function RestaurantsPage() {
                 Discover distinct dining spots offering honest, delicious food without the noise.
               </p>
             </div>
-            {!isLoading && !error && (
-              <span className="text-sm font-medium text-brand-muted shrink-0">
-                Showing {restaurants.length} {restaurants.length === 1 ? "restaurant" : "restaurants"}
-              </span>
-            )}
+            
+            <div className="flex flex-col items-start sm:items-end gap-3 shrink-0">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <div className="relative">
+                  <select 
+                    value={selectedCity}
+                    onChange={handleCityChange}
+                    disabled={isLocating || isLoading}
+                    className="appearance-none bg-white border border-brand-border/80 text-brand-fg text-sm rounded-md px-4 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-colors cursor-pointer w-full"
+                  >
+                    <option value="">All Locations</option>
+                    {CITIES.map(city => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-muted">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleUseLocation} 
+                  variant="outline" 
+                  disabled={isLocating}
+                  className="flex items-center gap-2 justify-center"
+                >
+                  {isLocating ? (
+                    <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin opacity-70" />
+                  ) : (
+                    <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                  {isLocating ? "Locating..." : "Use my location"}
+                </Button>
+              </div>
+              
+              {!isLoading && !error && (
+                <span className="text-sm font-medium text-brand-muted">
+                  Showing {restaurants.length} {restaurants.length === 1 ? "restaurant" : "restaurants"}
+                  {selectedCity && ` in ${selectedCity}`}
+                  {!selectedCity && restaurants[0]?.distanceKm !== undefined && " nearby"}
+                </span>
+              )}
+            </div>
           </div>
+
+          {locationError && (
+            <div className="mt-4 p-3 bg-rose-50 border border-rose-100 rounded-md text-sm text-rose-600 flex items-center gap-2 max-w-2xl">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              {locationError}
+            </div>
+          )}
         </div>
 
         {/* Loading State */}
@@ -141,7 +269,7 @@ export default function RestaurantsPage() {
         {/* Populated State */}
         {!isLoading && !error && restaurants.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {restaurants.map((restaurant) => (
+            {restaurants.map((restaurant, index) => (
               <Link
                 key={restaurant.id}
                 href={`/restaurants/${restaurant.id}`}
@@ -155,6 +283,7 @@ export default function RestaurantsPage() {
                     <ImageWithFallback
                       src={restaurant.coverImageUrl}
                       alt={restaurant.name}
+                      priority={index < 6}
                       className="absolute inset-0 w-full h-full object-cover"
                       fallbackNode={
                         <>
@@ -185,12 +314,20 @@ export default function RestaurantsPage() {
                       </span>
                     </div>
 
-                    <div className="flex items-center text-sm text-brand-muted mb-6">
-                      <svg className="w-4 h-4 mr-1 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span className="truncate">{restaurant.location}</span>
+                    <div className="flex items-center justify-between text-sm text-brand-muted mb-6">
+                      <div className="flex items-center min-w-0 pr-2">
+                        <svg className="w-4 h-4 mr-1 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="truncate">{restaurant.location}</span>
+                      </div>
+                      
+                      {restaurant.distanceKm !== undefined && (
+                        <span className="shrink-0 font-medium text-brand-primary bg-brand-primary/5 px-2 py-0.5 rounded text-xs border border-brand-primary/10">
+                          {formatDistance(restaurant.distanceKm)}
+                        </span>
+                      )}
                     </div>
 
                     <div className="pt-4 border-t border-brand-border/60 flex items-center justify-between text-xs text-brand-muted">

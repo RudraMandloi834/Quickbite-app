@@ -22,6 +22,23 @@ export async function getRestaurants(): Promise<Restaurant[]> {
   return res.json();
 }
 
+export async function getNearbyRestaurants(latitude: number, longitude: number, radiusKm: number = 10): Promise<Restaurant[]> {
+  const params = new URLSearchParams({
+    latitude: latitude.toString(),
+    longitude: longitude.toString(),
+    radiusKm: radiusKm.toString(),
+  });
+  
+  const res = await fetch(`${getApiBaseUrl()}/api/restaurants/nearby?${params.toString()}`, {
+    cache: "no-store",
+  });
+  
+  if (!res.ok) {
+    throw new Error(`Failed to fetch nearby restaurants (${res.status} ${res.statusText})`);
+  }
+  return res.json();
+}
+
 export async function getRestaurantMenu(restaurantId: number | string): Promise<MenuItem[]> {
   const res = await fetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/menu`, {
     cache: "no-store",
