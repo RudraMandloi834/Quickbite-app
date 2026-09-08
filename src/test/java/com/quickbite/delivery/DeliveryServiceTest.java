@@ -47,7 +47,7 @@ class DeliveryServiceTest {
         assertEquals(1L, delivery.getOrderId());
         assertEquals("Rahul Driver", delivery.getDriverName());
         assertEquals("9999999999", delivery.getDriverPhone());
-        assertEquals(DeliveryStatus.ASSIGNED, delivery.getStatus());
+        assertEquals(DeliveryStatus.ASSIGNING, delivery.getStatus());
     }
 
     @Test
@@ -97,6 +97,17 @@ class DeliveryServiceTest {
     }
 
     @Test
+    void advancesFromAssigningToAssigned() {
+        Delivery delivery = updateExistingDelivery(DeliveryStatus.ASSIGNING);
+        when(deliveryRepository.save(delivery)).thenReturn(delivery);
+
+        Delivery updated = deliveryService.updateStatus(1L, DeliveryStatus.ASSIGNED);
+
+        assertEquals(DeliveryStatus.ASSIGNED, updated.getStatus());
+        verify(deliveryRepository).save(delivery);
+    }
+
+    @Test
     void advancesFromAssignedToPickedUp() {
         Delivery delivery = updateExistingDelivery(DeliveryStatus.ASSIGNED);
         when(deliveryRepository.save(delivery)).thenReturn(delivery);
@@ -129,7 +140,7 @@ class DeliveryServiceTest {
 
     @Test
     void rejectsInvalidTransition() {
-        updateExistingDelivery(DeliveryStatus.ASSIGNED);
+        updateExistingDelivery(DeliveryStatus.ASSIGNING);
 
         assertStatus(HttpStatus.CONFLICT, () -> deliveryService.updateStatus(1L, DeliveryStatus.DELIVERED));
     }
@@ -148,7 +159,7 @@ class DeliveryServiceTest {
     }
 
     private Delivery assignedDelivery() {
-        return new Delivery(1L, "Rahul Driver", "9999999999", DeliveryStatus.ASSIGNED);
+        return new Delivery(1L, "Rahul Driver", "9999999999", DeliveryStatus.ASSIGNING);
     }
 
     private Delivery updateExistingDelivery(DeliveryStatus status) {

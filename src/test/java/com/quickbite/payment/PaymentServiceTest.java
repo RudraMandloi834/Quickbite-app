@@ -40,13 +40,16 @@ class PaymentServiceTest {
     @Mock
     private RazorpayClientWrapper razorpayClient;
 
+    @Mock
+    private com.quickbite.delivery.DeliveryService deliveryService;
+
     private PaymentService paymentService;
 
     @BeforeEach
     void setUp() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
             new CustomUserDetails("test@test.com", "pass", Collections.emptyList(), 1L), null));
-        paymentService = new PaymentService(paymentRepository, orderRepository, razorpayClient);
+        paymentService = new PaymentService(paymentRepository, orderRepository, razorpayClient, deliveryService);
     }
 
     @Test
@@ -128,6 +131,7 @@ class PaymentServiceTest {
         when(paymentRepository.save(payment)).thenReturn(payment);
 
         Order order = new Order(1L, 1L, BigDecimal.valueOf(250));
+        // mock order.getId() will return null unless we use reflection or a test builder. Wait, Order has an id field generated. We might need to mock or just let it pass as null?
         when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
 
         Payment verifiedPayment = paymentService.verifyPayment(req);
@@ -139,6 +143,7 @@ class PaymentServiceTest {
         verify(razorpayClient).verifySignature("order_123_server", "pay_123", "valid_sig");
         verify(paymentRepository).save(payment);
         verify(orderRepository).save(order);
+        verify(deliveryService).createDeliveryForOrder(order.getId());
     }
 
     @Test

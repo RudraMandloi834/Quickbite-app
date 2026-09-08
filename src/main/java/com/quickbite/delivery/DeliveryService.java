@@ -44,7 +44,7 @@ public class DeliveryService {
                 orderId,
                 SAMPLE_DRIVER_NAME,
                 SAMPLE_DRIVER_PHONE,
-                DeliveryStatus.ASSIGNED
+                DeliveryStatus.ASSIGNING
         ));
     }
 
@@ -80,7 +80,8 @@ public class DeliveryService {
     }
 
     private boolean isAllowedTransition(DeliveryStatus currentStatus, DeliveryStatus newStatus) {
-        return (currentStatus == DeliveryStatus.ASSIGNED && newStatus == DeliveryStatus.PICKED_UP)
+        return (currentStatus == DeliveryStatus.ASSIGNING && newStatus == DeliveryStatus.ASSIGNED)
+                || (currentStatus == DeliveryStatus.ASSIGNED && newStatus == DeliveryStatus.PICKED_UP)
                 || (currentStatus == DeliveryStatus.PICKED_UP && newStatus == DeliveryStatus.OUT_FOR_DELIVERY)
                 || (currentStatus == DeliveryStatus.OUT_FOR_DELIVERY && newStatus == DeliveryStatus.DELIVERED);
     }

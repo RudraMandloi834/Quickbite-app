@@ -18,11 +18,13 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final RazorpayClientWrapper razorpayClient;
+    private final com.quickbite.delivery.DeliveryService deliveryService;
 
-    public PaymentService(PaymentRepository paymentRepository, OrderRepository orderRepository, RazorpayClientWrapper razorpayClient) {
+    public PaymentService(PaymentRepository paymentRepository, OrderRepository orderRepository, RazorpayClientWrapper razorpayClient, com.quickbite.delivery.DeliveryService deliveryService) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.razorpayClient = razorpayClient;
+        this.deliveryService = deliveryService;
     }
 
     @Transactional
@@ -84,6 +86,10 @@ public class PaymentService {
         Payment payment = paymentRepository.findByRazorpayOrderId(request.getRazorpayOrderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found for given Razorpay order ID"));
 
+        if (payment.getStatus() == PaymentStatus.SUCCESS) {
+            return payment;
+        }
+
         boolean isValid = razorpayClient.verifySignature(
                 payment.getRazorpayOrderId(),
                 request.getRazorpayPaymentId(),
@@ -106,6 +112,8 @@ public class PaymentService {
         
         order.confirm();
         orderRepository.save(order);
+
+        deliveryService.createDeliveryForOrder(order.getId());
 
         return payment;
     }
