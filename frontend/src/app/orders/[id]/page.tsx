@@ -1,27 +1,38 @@
 "use client";
 
 import { use, useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
-import { getOrderById, getCustomerById, getRestaurantById } from "@/lib/api";
+import { getOrderById, getCustomerById, getRestaurantById, getDeliveryByOrderId } from "@/lib/api";
 import { Order } from "@/types/order";
 import { Customer } from "@/types/customer";
 import { Restaurant } from "@/types/restaurant";
+import { Delivery } from "@/types/delivery";
+import { useAuth } from "@/context/AuthContext";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
+  const { user, loading, requireAuth } = useAuth();
   const { id } = use(params);
 
   const [order, setOrder] = useState<Order | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   const loadOrderData = useCallback(async () => {
+    if (loading) return;
+    if (!user) {
+      requireAuth(() => {});
+      return;
+    }
     setError(null);
     setNotFound(false);
 
@@ -29,13 +40,15 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       const orderData = await getOrderById(id);
       setOrder(orderData);
 
-      const [customerData, restaurantData] = await Promise.all([
+      const [customerData, restaurantData, deliveryData] = await Promise.all([
         getCustomerById(orderData.customerId).catch(() => null),
-        getRestaurantById(orderData.restaurantId).catch(() => null)
+        getRestaurantById(orderData.restaurantId).catch(() => null),
+        getDeliveryByOrderId(orderData.id).catch(() => null)
       ]);
 
       setCustomer(customerData);
       setRestaurant(restaurantData);
+      setDelivery(deliveryData);
     } catch (err: unknown) {
       if (err instanceof Error && err.message.includes("404")) {
         setNotFound(true);
@@ -45,24 +58,31 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [id, router, user, loading, requireAuth]);
 
   useEffect(() => {
     let ignore = false;
     async function initialLoad() {
+      if (loading) return;
+      if (!user) {
+        requireAuth(() => {});
+        return;
+      }
       try {
         const orderData = await getOrderById(id);
         if (ignore) return;
         setOrder(orderData);
 
-        const [customerData, restaurantData] = await Promise.all([
+        const [customerData, restaurantData, deliveryData] = await Promise.all([
           getCustomerById(orderData.customerId).catch(() => null),
-          getRestaurantById(orderData.restaurantId).catch(() => null)
+          getRestaurantById(orderData.restaurantId).catch(() => null),
+          getDeliveryByOrderId(orderData.id).catch(() => null)
         ]);
 
         if (!ignore) {
           setCustomer(customerData);
           setRestaurant(restaurantData);
+          setDelivery(deliveryData);
           setIsLoading(false);
         }
       } catch (err: unknown) {
@@ -79,7 +99,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
     initialLoad();
     return () => { ignore = true; };
-  }, [id]);
+  }, [id, router]);
 
   const handleRetry = () => {
     setIsLoading(true);
@@ -239,6 +259,30 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
             </Card>
+
+            {delivery && (
+              <Card className="p-6 bg-white shadow-xs">
+                <div className="flex items-center justify-between pb-4 mb-4 border-b border-brand-border">
+                  <h2 className="font-serif text-xl font-medium text-brand-fg">Delivery Information</h2>
+                  <Badge variant={
+                    delivery.status === 'DELIVERED' ? 'success' : 
+                    delivery.status === 'ASSIGNED' ? 'neutral' : 'warning'
+                  }>
+                    {delivery.status.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-xs text-brand-muted mb-0.5 uppercase tracking-wider font-semibold">Driver</p>
+                    <p className="text-sm font-medium text-brand-fg">{delivery.driverName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-brand-muted mb-0.5 uppercase tracking-wider font-semibold">Contact</p>
+                    <p className="text-sm text-brand-fg">{delivery.driverPhone}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             <Card className="p-6 bg-white shadow-xs">
               <div className="flex items-center justify-between pb-4 mb-4 border-b border-brand-border">

@@ -10,6 +10,11 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import java.util.UUID;
+import java.time.LocalDateTime;
+import com.quickbite.auth.PasswordResetToken;
+import com.quickbite.auth.PasswordResetTokenRepository;
+
 
 @RestController
 @RequestMapping("/api/auth")
@@ -19,13 +24,17 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
-    public AuthController(CustomerRepository customerRepository, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager) {
+    public AuthController(CustomerRepository customerRepository, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager, PasswordResetTokenRepository passwordResetTokenRepository) {
         this.customerRepository = customerRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
+    
+    
 
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)

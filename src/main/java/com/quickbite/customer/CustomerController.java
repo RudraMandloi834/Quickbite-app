@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.quickbite.order.Order;
+import com.quickbite.order.OrderService;
+import com.quickbite.security.SecurityUtils;
+
 @RestController
 @RequestMapping("/api/customers")
 public class CustomerController {
@@ -20,9 +24,17 @@ public class CustomerController {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     private final CustomerService customerService;
+    private final OrderService orderService;
 
-    public CustomerController(CustomerService customerService) {
+    public CustomerController(CustomerService customerService, OrderService orderService) {
         this.customerService = customerService;
+        this.orderService = orderService;
+    }
+
+    @GetMapping("/me/orders")
+    public List<Order> getMyOrders() {
+        Long customerId = SecurityUtils.getAuthenticatedCustomerId();
+        return orderService.getCustomerOrders(customerId);
     }
 
     @PostMapping

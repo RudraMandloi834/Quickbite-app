@@ -53,6 +53,17 @@ public class DeliveryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
     }
 
+    public Delivery getDeliveryByOrderId(Long orderId) {
+        // Enforce ownership check via OrderRepository if necessary, or let the caller verify
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (!order.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        return deliveryRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found for this order"));
+    }
+
     @Transactional
     public Delivery updateStatus(Long deliveryId, DeliveryStatus status) {
         if (status == null) {

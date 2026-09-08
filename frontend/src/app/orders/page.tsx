@@ -1,52 +1,51 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
-import { getOrderById, getRestaurants } from "@/lib/api";
-import { getStoredOrderIds } from "@/lib/orders";
+import { getMyOrders, getRestaurants } from "@/lib/api";
 import { Order } from "@/types/order";
 import { Restaurant } from "@/types/restaurant";
+import { useAuth } from "@/context/AuthContext";
 
 type OrderWithRestaurant = Order & { restaurantName: string };
 
 export default function MyOrdersPage() {
+  const router = useRouter();
+  const { user, loading, requireAuth } = useAuth();
   const [orders, setOrders] = useState<OrderWithRestaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async (isRetry = false) => {
+    if (loading) return;
+    if (!user) {
+      requireAuth(() => {});
+      return;
+    }
     if (isRetry) {
       setIsLoading(true);
     }
     setError(null);
 
     try {
-      const orderIds = getStoredOrderIds();
-      if (orderIds.length === 0) {
-        setOrders([]);
-        setIsLoading(false);
-        return;
-      }
-
       // Fetch all required data in parallel
       const [fetchedOrders, restaurants] = await Promise.all([
-        Promise.all(orderIds.map((id) => getOrderById(id).catch(() => null))),
+        getMyOrders(),
         getRestaurants().catch(() => [] as Restaurant[])
       ]);
 
-      const validOrders = fetchedOrders.filter((o): o is Order => o !== null);
-
-      // Map restaurant names and sort by newest first
-      const enrichedOrders = validOrders.map((order) => {
+      // Map restaurant names and sort by newest first (although backend does this, we do it here just in case)
+      const enrichedOrders = fetchedOrders.map((order) => {
         const restaurant = restaurants.find((r) => r.id === order.restaurantId);
         return {
           ...order,
           restaurantName: restaurant?.name || "Unknown Restaurant",
         };
-      }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      });
 
       setOrders(enrichedOrders);
     } catch (err: unknown) {
@@ -54,35 +53,28 @@ export default function MyOrdersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [router, user, loading, requireAuth]);
 
   useEffect(() => {
     let ignore = false;
     async function load() {
       try {
-        const orderIds = getStoredOrderIds();
         if (ignore) return;
-        if (orderIds.length === 0) {
-          setOrders([]);
-          setIsLoading(false);
-          return;
-        }
 
         const [fetchedOrders, restaurants] = await Promise.all([
-          Promise.all(orderIds.map((id) => getOrderById(id).catch(() => null))),
+          getMyOrders(),
           getRestaurants().catch(() => [] as Restaurant[])
         ]);
 
         if (ignore) return;
-        const validOrders = fetchedOrders.filter((o): o is Order => o !== null);
 
-        const enrichedOrders = validOrders.map((order) => {
+        const enrichedOrders = fetchedOrders.map((order) => {
           const restaurant = restaurants.find((r) => r.id === order.restaurantId);
           return {
             ...order,
             restaurantName: restaurant?.name || "Unknown Restaurant",
           };
-        }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        });
 
         setOrders(enrichedOrders);
         setIsLoading(false);
@@ -93,9 +85,13 @@ export default function MyOrdersPage() {
         }
       }
     }
-    load();
+    if (user) {
+      load();
+    } else if (!loading) {
+      requireAuth(() => {});
+    }
     return () => { ignore = true; };
-  }, []);
+  }, [router, user, loading, requireAuth]);
 
   const getStatusVariant = (status: string) => {
     switch (status.toUpperCase()) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/Container";
 import { Card, CardContent } from "@/components/Card";
@@ -9,10 +9,15 @@ import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { getRestaurantById, getRestaurantMenu } from "@/lib/api";
-import { addItemToCart } from "@/lib/cart";
+import { useAuth } from "@/context/AuthContext";
+import { addItemToCart, checkCartConflict } from "@/lib/cart";
+import { ReplaceCartModal } from "@/components/ReplaceCartModal";
+import { CartDisplay } from "@/types/cart";
 import { Restaurant, MenuItem } from "@/types/restaurant";
 
 export default function RestaurantDetailsPage() {
+  const router = useRouter();
+  const { requireAuth } = useAuth();
   const params = useParams();
   const rawId = params?.id;
   const restaurantId = Array.isArray(rawId) ? rawId[0] : (rawId as string);
@@ -21,8 +26,14 @@ export default function RestaurantDetailsPage() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [addingItemId, setAddingItemId] = useState<number | null>(null);
+    const [addingItemId, setAddingItemId] = useState<number | null>(null);
   const [cartToast, setCartToast] = useState<{ message: string; subtext?: string } | null>(null);
+  
+  const [pendingReplacement, setPendingReplacement] = useState<{
+    currentCart: CartDisplay;
+    newItem: MenuItem;
+  } | null>(null);
+  const [isReplacing, setIsReplacing] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!restaurantId) return;
@@ -83,11 +94,27 @@ export default function RestaurantDetailsPage() {
     };
   }, [restaurantId]);
 
-  const handleAddToCart = async (item: MenuItem) => {
+  const handleAddToCart = async (item: MenuItem, forceReplace = false) => {
     if (!restaurant) return;
-    setAddingItemId(item.id);
+    
+    if (!forceReplace) {
+       setAddingItemId(item.id);
+       try {
+         const conflictCheck = await checkCartConflict(restaurant.id);
+         if (conflictCheck.conflict) {
+            setPendingReplacement({ currentCart: conflictCheck.cartDisplay, newItem: item });
+            setAddingItemId(null);
+            return;
+         }
+       } catch (err) {
+         // ignore and proceed
+       }
+    } else {
+       setAddingItemId(item.id);
+    }
+    
     try {
-      const { replacedRestaurant } = await addItemToCart(restaurant.id, item.id, 1);
+      const { replacedRestaurant } = await addItemToCart(restaurant.id, item.id, 1, forceReplace);
       setCartToast({
         message: `Added "${item.name}" to cart`,
         subtext: replacedRestaurant
@@ -95,7 +122,14 @@ export default function RestaurantDetailsPage() {
           : undefined,
       });
       setTimeout(() => setCartToast(null), 4000);
+      if (forceReplace) {
+         setPendingReplacement(null);
+      }
     } catch (err) {
+      if (err instanceof Error && err.message === "CART_CONFLICT") {
+         // Should not happen as we catch it before, but just in case
+         return;
+      }
       setCartToast({
         message: "Failed to add item to cart",
         subtext: err instanceof Error ? err.message : "Please try again",
@@ -103,11 +137,29 @@ export default function RestaurantDetailsPage() {
       setTimeout(() => setCartToast(null), 4000);
     } finally {
       setAddingItemId(null);
+      setIsReplacing(false);
     }
+  };
+
+  const confirmReplacement = async () => {
+    if (!pendingReplacement || !restaurant) return;
+    setIsReplacing(true);
+    await handleAddToCart(pendingReplacement.newItem, true);
   };
 
   return (
     <div className="flex-1 py-10 sm:py-14">
+            {/* Replacement Modal */}
+      <ReplaceCartModal
+        isOpen={!!pendingReplacement}
+        onClose={() => setPendingReplacement(null)}
+        onConfirm={confirmReplacement}
+        currentCart={pendingReplacement?.currentCart || null}
+        newRestaurant={restaurant}
+        newItem={pendingReplacement?.newItem || null}
+        isReplacing={isReplacing}
+      />
+      
       <Container>
         {/* Navigation Breadcrumb */}
         <div className="mb-6">
@@ -315,7 +367,7 @@ export default function RestaurantDetailsPage() {
                               size="sm"
                               variant="primary"
                               disabled={addingItemId === item.id}
-                              onClick={() => handleAddToCart(item)}
+                              onClick={() => requireAuth(() => handleAddToCart(item))}
                               className="text-xs px-3.5 h-9 font-medium"
                             >
                               {addingItemId === item.id ? "Adding..." : "Add to cart"}

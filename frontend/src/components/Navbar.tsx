@@ -1,7 +1,22 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { Container } from "./Container";
+import { useAuth } from "@/context/AuthContext";
 
 export function Navbar() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, logout, requireAuth } = useAuth();
+  const isLoggedIn = !!user;
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-brand-border bg-brand-bg/80 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between">
@@ -34,15 +49,25 @@ export function Navbar() {
             </svg>
             Cart
           </Link>
-          <Link href="/login" className="text-sm font-medium text-brand-fg hover:text-brand-primary transition-colors">
-            Log in
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-full bg-brand-fg px-4 py-2 text-sm font-medium text-brand-bg hover:bg-brand-fg/90 transition-colors"
-          >
-            Sign up
-          </Link>
+          
+          {isLoggedIn ? (
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-brand-muted hidden md:inline-block truncate max-w-[150px]" title={user?.sub}>
+                {user?.sub?.split('@')[0]}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="text-sm font-medium text-brand-fg hover:text-brand-primary transition-colors"
+              >
+                Log out
+              </button>
+            </div>
+          ) : (
+            <>
+              <button onClick={() => requireAuth(() => {})} className="text-sm font-medium text-brand-fg hover:text-brand-primary transition-colors">Log in</button>
+              <button onClick={() => requireAuth(() => {})} className="rounded-full bg-brand-fg px-4 py-2 text-sm font-medium text-brand-bg hover:bg-brand-fg/90 transition-colors">Sign up</button>
+            </>
+          )}
         </div>
       </Container>
     </header>

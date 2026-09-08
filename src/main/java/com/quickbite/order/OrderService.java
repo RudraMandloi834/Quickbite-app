@@ -70,9 +70,7 @@ public class OrderService {
                 .toList();
         orderItemRepository.saveAll(orderItems);
 
-        cartItemRepository.deleteByCartId(cartId);
-        cart.setTotalAmount(BigDecimal.ZERO);
-        cartRepository.save(cart);
+
 
         order.setItems(orderItems);
         return order;
@@ -86,6 +84,17 @@ public class OrderService {
         }
         order.setItems(orderItemRepository.findByOrderId(orderId));
         return order;
+    }
+
+    public List<Order> getCustomerOrders(Long customerId) {
+        if (!customerId.equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        List<Order> orders = orderRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
+        for (Order order : orders) {
+            order.setItems(orderItemRepository.findByOrderId(order.getId()));
+        }
+        return orders;
     }
 
     @Transactional

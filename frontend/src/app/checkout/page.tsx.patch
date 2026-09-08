@@ -1,0 +1,21 @@
+--- src/app/checkout/page.tsx
++++ src/app/checkout/page.tsx
+@@ -19,6 +19,7 @@
+   getStoredCartId,
+   fetchCartDisplay,
+   clearStoredCartId,
+ } from "@/lib/cart";
++import { getUser } from "@/lib/auth";
+ 
+ export default function CheckoutPage() {
+   const router = useRouter();
+@@ -32,6 +33,10 @@
+   useEffect(() => {
+     let ignore = false;
++    if (!getUser()) {
++      router.push("/login?redirect=/checkout&message=Log in to complete your order");
++      return;
++    }
+     const fetchIt = async () => {
+       setIsLoading(true);
+       setError(null);

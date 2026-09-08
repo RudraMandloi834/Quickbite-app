@@ -1,0 +1,32 @@
+--- src/app/orders/page.tsx
++++ src/app/orders/page.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { useEffect, useState, useCallback } from "react";
++import { useRouter } from "next/navigation";
+ import { Container } from "@/components/Container";
+ import { Card } from "@/components/Card";
+ import { Badge } from "@/components/Badge";
+@@ -9,6 +10,7 @@
+ import { getOrderById, getRestaurants } from "@/lib/api";
+ import { getStoredOrderIds } from "@/lib/orders";
+ import { Order } from "@/types/order";
+ import { Restaurant } from "@/types/restaurant";
++import { getUser } from "@/lib/auth";
+ 
+ type OrderWithRestaurant = Order & { restaurantName: string };
+ 
+ export default function MyOrdersPage() {
++  const router = useRouter();
+   const [orders, setOrders] = useState<OrderWithRestaurant[]>([]);
+   const [isLoading, setIsLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
+ 
+   const fetchOrders = useCallback(async (isRetry = false) => {
++    if (!getUser()) {
++      router.push("/login?redirect=/orders&message=Log in to view your orders");
++      return;
++    }
+     if (isRetry) {
+       setIsLoading(true);
+     }

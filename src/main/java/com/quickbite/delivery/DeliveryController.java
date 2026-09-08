@@ -31,6 +31,11 @@ public class DeliveryController {
         return deliveryService.getDelivery(deliveryId);
     }
 
+    @GetMapping("/order/{orderId}")
+    public Delivery getDeliveryByOrderId(@PathVariable Long orderId) {
+        return deliveryService.getDeliveryByOrderId(orderId);
+    }
+
     @PatchMapping("/{deliveryId}/status")
     public Delivery updateStatus(
             @PathVariable Long deliveryId,

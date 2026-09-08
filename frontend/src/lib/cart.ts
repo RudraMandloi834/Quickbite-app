@@ -33,10 +33,24 @@ export function clearStoredCartId(): void {
  * If no cart exists or if the existing cart is from a different restaurant,
  * creates a new cart for this restaurant and saves the cartId in localStorage.
  */
+
+export async function checkCartConflict(restaurantId: number): Promise<{ conflict: false } | { conflict: true, cartDisplay: CartDisplay }> {
+  const cartId = getStoredCartId();
+  if (!cartId) return { conflict: false };
+  try {
+     const display = await fetchCartDisplay(cartId);
+     if (display && display.restaurantId !== restaurantId && display.items.length > 0) {
+        return { conflict: true, cartDisplay: display };
+     }
+  } catch {}
+  return { conflict: false };
+}
+
 export async function addItemToCart(
   restaurantId: number,
   menuItemId: number,
-  quantity: number = 1
+  quantity: number = 1,
+  forceReplace: boolean = false
 ): Promise<{ cart: Cart; replacedRestaurant: boolean }> {
   let cartId = getStoredCartId();
   let existingCart: Cart | null = null;
@@ -61,11 +75,14 @@ export async function addItemToCart(
 
   // If cart was from a different restaurant
   if (existingCart && existingCart.restaurantId !== restaurantId) {
+    if (!forceReplace) {
+      throw new Error("CART_CONFLICT"); // Safety check, though the UI should catch it first
+    }
     replacedRestaurant = true;
   }
 
   // Create a new cart for this restaurant
-  const newCart = await createCart(restaurantId, 1);
+  const newCart = await createCart(restaurantId);
   setStoredCartId(newCart.id);
   await addCartItem(newCart.id, menuItemId, quantity);
   const finalCart = await getCart(newCart.id);
