@@ -9,4 +9,8 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     boolean existsByOrderId(Long orderId);
 
     Optional<Delivery> findByOrderId(Long orderId);
+
+    java.util.List<Delivery> findByStatus(DeliveryStatus status);
+
+    java.util.List<Delivery> findByDriverId(Long driverId);
 }

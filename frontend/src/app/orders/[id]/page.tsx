@@ -13,6 +13,7 @@ import { Customer } from "@/types/customer";
 import { Restaurant } from "@/types/restaurant";
 import { Delivery } from "@/types/delivery";
 import { useAuth } from "@/context/AuthContext";
+import { DeliveryTracker } from "@/components/DeliveryTracker";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -260,28 +261,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
               </div>
             </Card>
 
-            {delivery && (
-              <Card className="p-6 bg-white shadow-xs">
-                <div className="flex items-center justify-between pb-4 mb-4 border-b border-brand-border">
-                  <h2 className="font-serif text-xl font-medium text-brand-fg">Delivery Information</h2>
-                  <Badge variant={
-                    delivery.status === 'DELIVERED' ? 'success' : 
-                    delivery.status === 'ASSIGNED' ? 'neutral' : 'warning'
-                  }>
-                    {delivery.status.replace(/_/g, ' ')}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <p className="text-xs text-brand-muted mb-0.5 uppercase tracking-wider font-semibold">Driver</p>
-                    <p className="text-sm font-medium text-brand-fg">{delivery.driverName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-brand-muted mb-0.5 uppercase tracking-wider font-semibold">Contact</p>
-                    <p className="text-sm text-brand-fg">{delivery.driverPhone}</p>
-                  </div>
-                </div>
-              </Card>
+            {order.status.toUpperCase() === "CONFIRMED" && (
+              <DeliveryTracker delivery={delivery} />
             )}
 
             <Card className="p-6 bg-white shadow-xs">

@@ -27,6 +27,12 @@ public class Delivery {
     private Instant createdAt;
     private Instant updatedAt;
 
+    private Long driverId;
+    private Instant assignedAt;
+    private Instant pickedUpAt;
+    private Instant outForDeliveryAt;
+    private Instant deliveredAt;
+
     protected Delivery() {
     }
 
@@ -55,6 +61,10 @@ public class Delivery {
         return driverPhone;
     }
 
+    public Long getDriverId() {
+        return driverId;
+    }
+
     public DeliveryStatus getStatus() {
         return status;
     }
@@ -67,8 +77,35 @@ public class Delivery {
         return updatedAt;
     }
 
+    public Instant getAssignedAt() {
+        return assignedAt;
+    }
+
+    public Instant getPickedUpAt() {
+        return pickedUpAt;
+    }
+
+    public Instant getOutForDeliveryAt() {
+        return outForDeliveryAt;
+    }
+
+    public Instant getDeliveredAt() {
+        return deliveredAt;
+    }
+
+    public void setDriver(Long driverId, String driverName, String driverPhone) {
+        this.driverId = driverId;
+        this.driverName = driverName;
+        this.driverPhone = driverPhone;
+    }
+
     public void updateStatus(DeliveryStatus status) {
         this.status = status;
         this.updatedAt = Instant.now();
+        
+        if (status == DeliveryStatus.ASSIGNED) this.assignedAt = this.updatedAt;
+        if (status == DeliveryStatus.PICKED_UP) this.pickedUpAt = this.updatedAt;
+        if (status == DeliveryStatus.OUT_FOR_DELIVERY) this.outForDeliveryAt = this.updatedAt;
+        if (status == DeliveryStatus.DELIVERED) this.deliveredAt = this.updatedAt;
     }
 }

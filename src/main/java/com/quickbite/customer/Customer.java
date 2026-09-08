@@ -22,6 +22,8 @@ public class Customer {
     
     @JsonIgnore
     private String password;
+    
+    private String role = "ROLE_CUSTOMER";
 
     protected Customer() {
     }
@@ -37,6 +39,14 @@ public class Customer {
         this.email = email;
         this.phone = phone;
         this.password = password;
+    }
+    
+    public Customer(String name, String email, String phone, String password, String role) {
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+        this.password = password;
+        this.role = role;
     }
 
     public Long getId() {
@@ -61,5 +71,13 @@ public class Customer {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 }

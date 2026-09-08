@@ -15,9 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class DeliveryController {
 
     private final DeliveryService deliveryService;
+    private final com.quickbite.customer.CustomerRepository customerRepository;
 
-    public DeliveryController(DeliveryService deliveryService) {
+    public DeliveryController(DeliveryService deliveryService, com.quickbite.customer.CustomerRepository customerRepository) {
         this.deliveryService = deliveryService;
+        this.customerRepository = customerRepository;
     }
 
     @PostMapping("/orders/{orderId}")
@@ -36,11 +38,35 @@ public class DeliveryController {
         return deliveryService.getDeliveryByOrderId(orderId);
     }
 
+    @GetMapping("/available")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('DRIVER') or hasRole('OPERATOR')")
+    public java.util.List<Delivery> getAvailableDeliveries() {
+        return deliveryService.getAvailableDeliveries();
+    }
+
+    @GetMapping("/driver/me")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('DRIVER') or hasRole('OPERATOR')")
+    public java.util.List<Delivery> getMyDeliveries() {
+        Long driverId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        return deliveryService.getDeliveriesByDriver(driverId);
+    }
+
+    @PostMapping("/{deliveryId}/assign")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('DRIVER') or hasRole('OPERATOR')")
+    public Delivery assignDriver(@PathVariable Long deliveryId) {
+        Long driverId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        com.quickbite.customer.Customer driver = customerRepository.findById(driverId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.NOT_FOUND, "Driver not found"));
+        return deliveryService.assignDriver(deliveryId, driverId, driver.getName(), driver.getPhone());
+    }
+
     @PatchMapping("/{deliveryId}/status")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('DRIVER') or hasRole('OPERATOR')")
     public Delivery updateStatus(
             @PathVariable Long deliveryId,
             @RequestBody UpdateDeliveryStatusRequest request
     ) {
-        return deliveryService.updateStatus(deliveryId, request.status());
+        Long driverId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        return deliveryService.updateStatus(deliveryId, request.status(), driverId);
     }
 }

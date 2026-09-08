@@ -185,3 +185,33 @@ export async function signup(name: string, email: string, password: string): Pro
   }
   return res.json();
 }
+
+export async function getAvailableDeliveries(): Promise<Delivery[]> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/deliveries/available`, { cache: "no-store" });
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
+  return res.json();
+}
+
+export async function getMyDeliveries(): Promise<Delivery[]> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/deliveries/driver/me`, { cache: "no-store" });
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
+  return res.json();
+}
+
+export async function assignDelivery(deliveryId: number): Promise<Delivery> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/deliveries/${deliveryId}/assign`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
+  return res.json();
+}
+
+export async function updateDeliveryStatus(deliveryId: number, status: string): Promise<Delivery> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/deliveries/${deliveryId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
+  return res.json();
+}

@@ -29,7 +29,7 @@ public class ApplicationConfig {
                 .map(customer -> new CustomUserDetails(
                         customer.getEmail(),
                         customer.getPassword() != null ? customer.getPassword() : "",
-                        Collections.emptyList(),
+                        Collections.singletonList(new org.springframework.security.core.authority.SimpleGrantedAuthority(customer.getRole())),
                         customer.getId()))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }

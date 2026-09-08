@@ -24,9 +24,15 @@ class DeliveryControllerTest {
 
     private MockMvc mockMvc;
 
+    @Mock
+    private com.quickbite.customer.CustomerRepository customerRepository;
+
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new DeliveryController(deliveryService)).build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                new com.quickbite.security.CustomUserDetails("test@test.com", "pass", java.util.Collections.emptyList(), 1L), null));
+        mockMvc = MockMvcBuilders.standaloneSetup(new DeliveryController(deliveryService, customerRepository)).build();
     }
 
     @Test
@@ -47,6 +53,6 @@ class DeliveryControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(deliveryService, org.mockito.Mockito.never())
-                .updateStatus(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
+                .updateStatus(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 }

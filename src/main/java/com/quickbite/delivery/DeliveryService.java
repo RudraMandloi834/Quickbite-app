@@ -42,8 +42,8 @@ public class DeliveryService {
 
         return deliveryRepository.save(new Delivery(
                 orderId,
-                SAMPLE_DRIVER_NAME,
-                SAMPLE_DRIVER_PHONE,
+                null,
+                null,
                 DeliveryStatus.ASSIGNING
         ));
     }
@@ -54,7 +54,6 @@ public class DeliveryService {
     }
 
     public Delivery getDeliveryByOrderId(Long orderId) {
-        // Enforce ownership check via OrderRepository if necessary, or let the caller verify
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         if (!order.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
@@ -65,18 +64,43 @@ public class DeliveryService {
     }
 
     @Transactional
-    public Delivery updateStatus(Long deliveryId, DeliveryStatus status) {
+    public Delivery assignDriver(Long deliveryId, Long driverId, String driverName, String driverPhone) {
+        Delivery delivery = getDelivery(deliveryId);
+        if (delivery.getStatus() != DeliveryStatus.ASSIGNING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery is not waiting for assignment");
+        }
+        
+        delivery.setDriver(driverId, driverName, driverPhone);
+        delivery.updateStatus(DeliveryStatus.ASSIGNED);
+        return deliveryRepository.save(delivery);
+    }
+
+    @Transactional
+    public Delivery updateStatus(Long deliveryId, DeliveryStatus status, Long requestingDriverId) {
         if (status == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delivery status is required");
         }
 
         Delivery delivery = getDelivery(deliveryId);
+        
+        if (requestingDriverId != null && !requestingDriverId.equals(delivery.getDriverId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not assigned to this delivery");
+        }
+
         if (!isAllowedTransition(delivery.getStatus(), status)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invalid delivery status transition");
         }
 
         delivery.updateStatus(status);
         return deliveryRepository.save(delivery);
+    }
+
+    public java.util.List<Delivery> getAvailableDeliveries() {
+        return deliveryRepository.findByStatus(DeliveryStatus.ASSIGNING);
+    }
+
+    public java.util.List<Delivery> getDeliveriesByDriver(Long driverId) {
+        return deliveryRepository.findByDriverId(driverId);
     }
 
     private boolean isAllowedTransition(DeliveryStatus currentStatus, DeliveryStatus newStatus) {
