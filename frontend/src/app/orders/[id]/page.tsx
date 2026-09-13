@@ -1,19 +1,21 @@
 "use client";
 
-import { use, useEffect, useState, useCallback } from "react";
+import { use, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
-import { getOrderById, getCustomerById, getRestaurantById, getDeliveryByOrderId } from "@/lib/api";
+import { getOrderById, getCustomerById, getRestaurantById, getDeliveryByOrderId, getApiBaseUrl } from "@/lib/api";
 import { Order } from "@/types/order";
 import { Customer } from "@/types/customer";
 import { Restaurant } from "@/types/restaurant";
 import { Delivery } from "@/types/delivery";
 import { useAuth } from "@/context/AuthContext";
 import { DeliveryTracker } from "@/components/DeliveryTracker";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -27,6 +29,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected" | "reconnecting">("disconnected");
 
   const loadOrderData = useCallback(async () => {
     if (loading) return;
@@ -100,7 +103,74 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
     initialLoad();
     return () => { ignore = true; };
-  }, [id, router]);
+  }, [id, router, loading, user, requireAuth]);
+
+  // WebSocket Connection
+  useEffect(() => {
+    if (!delivery || delivery.status === "DELIVERED" || delivery.status === "CANCELLED") return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(`${getApiBaseUrl()}/ws`),
+      connectHeaders: {
+        Authorization: `Bearer ${token}`
+      },
+      reconnectDelay: 5000,
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
+    });
+
+    client.onConnect = () => {
+      console.log("[STOMP] Connected successfully to the backend!");
+      setWsStatus(prev => {
+        if (prev === "reconnecting") {
+          console.log("[STOMP] Reconnected, fetching latest delivery state...");
+          getDeliveryByOrderId(id).then(setDelivery).catch(console.error);
+        }
+        return "connected";
+      });
+      const topic = `/topic/deliveries/${delivery.id}`;
+      console.log(`[STOMP] Subscribing to destination: ${topic}`);
+      client.subscribe(topic, (message) => {
+        console.log(`[STOMP] Received message on ${topic}:`, message.body);
+        try {
+          const event = JSON.parse(message.body);
+          setDelivery(prev => {
+            if (!prev) return prev;
+            console.log(`[STOMP] Updating delivery status from ${prev.status} to ${event.status}`);
+            const updated = { ...prev, status: event.status };
+            const timestamp = event.timestamp;
+            if (event.status === "ASSIGNED") updated.assignedAt = timestamp;
+            else if (event.status === "PICKED_UP") updated.pickedUpAt = timestamp;
+            else if (event.status === "OUT_FOR_DELIVERY") updated.outForDeliveryAt = timestamp;
+            else if (event.status === "DELIVERED") updated.deliveredAt = timestamp;
+            return updated;
+          });
+        } catch (e) {
+          console.error("[STOMP] Failed to parse delivery event", e);
+        }
+      });
+    };
+
+    client.onWebSocketClose = () => {
+      console.log("[STOMP] WebSocket closed");
+      setWsStatus(prev => prev === "connected" ? "reconnecting" : prev);
+    };
+    client.onWebSocketError = (error) => {
+      console.error("[STOMP] WebSocket error:", error);
+      setWsStatus("reconnecting");
+    };
+
+    setWsStatus("connecting");
+    client.activate();
+
+    return () => {
+      client.deactivate();
+      setWsStatus("disconnected");
+    };
+  }, [delivery?.id]); // Only re-run if delivery ID changes
 
   const handleRetry = () => {
     setIsLoading(true);
@@ -199,7 +269,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-semibold text-emerald-900">Order placed successfully!</h3>
               <p className="text-sm mt-0.5">We&apos;ve received your payment and the restaurant is preparing your food.</p>
             </div>
@@ -207,9 +277,28 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         )}
 
         <div className="mb-8 sm:mb-12">
-          <Badge variant="default" className="mb-2">
-            Order Details
-          </Badge>
+          <div className="flex items-center gap-3 mb-2">
+            <Badge variant="default">
+              Order Details
+            </Badge>
+            {delivery && delivery.status !== "DELIVERED" && delivery.status !== "CANCELLED" && (
+              <span className={`flex items-center gap-1.5 text-xs font-medium ${
+                wsStatus === 'connected' ? 'text-emerald-600' :
+                wsStatus === 'connecting' || wsStatus === 'reconnecting' ? 'text-amber-500' :
+                'text-brand-muted'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  wsStatus === 'connected' ? 'bg-emerald-500 animate-pulse' :
+                  wsStatus === 'connecting' || wsStatus === 'reconnecting' ? 'bg-amber-400 animate-pulse' :
+                  'bg-brand-muted'
+                }`}></span>
+                {wsStatus === 'connected' ? 'Live Updates On' :
+                 wsStatus === 'reconnecting' ? 'Reconnecting...' :
+                 wsStatus === 'connecting' ? 'Connecting...' :
+                 'Live Updates Off'}
+              </span>
+            )}
+          </div>
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <h1 className="text-4xl sm:text-5xl font-serif text-brand-fg tracking-tight">

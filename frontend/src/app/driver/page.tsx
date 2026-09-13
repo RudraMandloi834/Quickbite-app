@@ -50,6 +50,44 @@ export default function DriverDashboardPage() {
     fetchDeliveries();
   }, [fetchDeliveries]);
 
+  // WebSocket Connection for Auto-refresh
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token || !user || !user.roles?.includes("ROLE_DRIVER")) return;
+
+    import("@stomp/stompjs").then(({ Client }) => {
+      import("sockjs-client").then((SockJS) => {
+        const getApiBaseUrl = () => {
+          if (typeof window !== "undefined") {
+            const host = window.location.hostname;
+            return `http://${host}:8080`;
+          }
+          return "http://localhost:8080";
+        };
+
+        const client = new Client({
+          webSocketFactory: () => new SockJS.default(`${getApiBaseUrl()}/ws`),
+          connectHeaders: {
+            Authorization: `Bearer ${token}`
+          },
+          reconnectDelay: 5000,
+        });
+
+        client.onConnect = () => {
+          client.subscribe(`/topic/deliveries`, () => {
+            fetchDeliveries();
+          });
+        };
+
+        client.activate();
+
+        return () => {
+          client.deactivate();
+        };
+      });
+    });
+  }, [user, fetchDeliveries]);
+
   const handleAssign = async (deliveryId: number) => {
     try {
       await assignDelivery(deliveryId);

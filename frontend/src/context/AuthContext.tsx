@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getUser, AuthUser, removeToken, setToken as saveToken } from "@/lib/auth";
 import { login as apiLogin, signup as apiSignup } from "@/lib/api";
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("auth_unauthorized", handleUnauthorized);
   }, []);
 
-  const login = async (email: string, pass: string) => {
+  const login = useCallback(async (email: string, pass: string) => {
     const { token } = await apiLogin(email, pass);
     saveToken(token);
     setUser(getUser());
@@ -50,9 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPendingAction(null);
     }
     setIsModalOpen(false);
-  };
+  }, [pendingAction]);
 
-  const signup = async (name: string, email: string, pass: string) => {
+  const signup = useCallback(async (name: string, email: string, pass: string) => {
     await apiSignup(name, email, pass);
     const { token } = await apiLogin(email, pass);
     saveToken(token);
@@ -63,17 +63,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPendingAction(null);
     }
     setIsModalOpen(false);
-  };
+  }, [pendingAction]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     removeToken();
     setUser(null);
     setPendingAction(null);
     setIsModalOpen(false);
     // don't navigate away aggressively, just stay where you are
-  };
+  }, []);
 
-  const requireAuth = (action: () => void) => {
+  const requireAuth = useCallback((action: () => void) => {
     const currentUser = getUser();
     if (currentUser) {
       action();
@@ -81,12 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPendingAction(() => action);
       setIsModalOpen(true);
     }
-  };
+  }, []);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setIsModalOpen(false);
     setPendingAction(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, signup, logout, requireAuth, closeModal }}>

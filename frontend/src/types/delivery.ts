@@ -6,4 +6,8 @@ export interface Delivery {
   status: string;
   createdAt: string;
   updatedAt: string;
+  assignedAt?: string;
+  pickedUpAt?: string;
+  outForDeliveryAt?: string;
+  deliveredAt?: string;
 }

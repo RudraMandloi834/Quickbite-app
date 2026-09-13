@@ -17,9 +17,12 @@ public class DeliveryService {
     private final DeliveryRepository deliveryRepository;
     private final OrderRepository orderRepository;
 
-    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository) {
+    private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
+    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate) {
         this.deliveryRepository = deliveryRepository;
         this.orderRepository = orderRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @Transactional
@@ -72,7 +75,9 @@ public class DeliveryService {
         
         delivery.setDriver(driverId, driverName, driverPhone);
         delivery.updateStatus(DeliveryStatus.ASSIGNED);
-        return deliveryRepository.save(delivery);
+        Delivery saved = deliveryRepository.save(delivery);
+        publishDeliveryEvent(saved);
+        return saved;
     }
 
     @Transactional
@@ -92,7 +97,20 @@ public class DeliveryService {
         }
 
         delivery.updateStatus(status);
-        return deliveryRepository.save(delivery);
+        Delivery saved = deliveryRepository.save(delivery);
+        publishDeliveryEvent(saved);
+        return saved;
+    }
+
+    private void publishDeliveryEvent(Delivery delivery) {
+        DeliveryStatusEvent event = new DeliveryStatusEvent(
+                delivery.getId(),
+                delivery.getOrderId(),
+                delivery.getStatus(),
+                delivery.getUpdatedAt()
+        );
+        messagingTemplate.convertAndSend("/topic/deliveries/" + delivery.getId(), event);
+        messagingTemplate.convertAndSend("/topic/deliveries", event);
     }
 
     public java.util.List<Delivery> getAvailableDeliveries() {

@@ -1,5 +1,6 @@
 export interface AuthUser {
   customerId: number;
+  roles?: string[];
   sub: string;
   exp: number;
 }

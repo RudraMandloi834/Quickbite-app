@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/error").permitAll()
+                .requestMatchers("/ws/**").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/restaurants/**").permitAll() // Browse restaurants/menus
                 .anyRequest().authenticated()
             )

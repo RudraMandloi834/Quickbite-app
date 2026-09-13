@@ -28,11 +28,14 @@ class DeliveryServiceTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
     private DeliveryService deliveryService;
 
     @BeforeEach
     void setUp() {
-        deliveryService = new DeliveryService(deliveryRepository, orderRepository);
+        deliveryService = new DeliveryService(deliveryRepository, orderRepository, messagingTemplate);
     }
 
     @Test
@@ -143,6 +146,7 @@ class DeliveryServiceTest {
         updateExistingDelivery(DeliveryStatus.ASSIGNING);
 
         assertStatus(HttpStatus.CONFLICT, () -> deliveryService.updateStatus(1L, DeliveryStatus.DELIVERED, 1L));
+        org.mockito.Mockito.verifyNoInteractions(messagingTemplate);
     }
 
     @Test
@@ -150,6 +154,7 @@ class DeliveryServiceTest {
         updateExistingDelivery(DeliveryStatus.DELIVERED);
 
         assertStatus(HttpStatus.CONFLICT, () -> deliveryService.updateStatus(1L, DeliveryStatus.PICKED_UP, 1L));
+        org.mockito.Mockito.verifyNoInteractions(messagingTemplate);
     }
 
     @Test
@@ -158,6 +163,7 @@ class DeliveryServiceTest {
         delivery.setDriver(99L, "Other Driver", "111");
 
         assertStatus(HttpStatus.FORBIDDEN, () -> deliveryService.updateStatus(1L, DeliveryStatus.PICKED_UP, 1L));
+        org.mockito.Mockito.verifyNoInteractions(messagingTemplate);
     }
 
     private Order confirmedOrder() {

@@ -7,10 +7,16 @@ import java.util.List;
 
 public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
 
+    @Query("SELECT r FROM Restaurant r WHERE r.status IS NULL OR r.status = 'APPROVED'")
+    List<Restaurant> findApprovedRestaurants();
+
+    List<Restaurant> findByOwnerId(Long ownerId);
+
     @Query(value = "SELECT id, name, cuisine, location, rating, address, city, area, latitude, longitude, opening_hours AS openingHours, delivery_radius AS deliveryRadius, cover_image_url AS coverImageUrl, " +
            "(6371 * acos(cos(radians(:latitude)) * cos(radians(latitude)) * cos(radians(longitude) - radians(:longitude)) + sin(radians(:latitude)) * sin(radians(latitude)))) AS distanceKm " +
            "FROM restaurant " +
            "WHERE latitude IS NOT NULL AND longitude IS NOT NULL " +
+           "AND (status IS NULL OR status = 'APPROVED') " +
            "AND latitude BETWEEN :minLat AND :maxLat " +
            "AND longitude BETWEEN :minLon AND :maxLon " +
            "AND (6371 * acos(cos(radians(:latitude)) * cos(radians(latitude)) * cos(radians(longitude) - radians(:longitude)) + sin(radians(:latitude)) * sin(radians(latitude)))) <= :radiusKm " +

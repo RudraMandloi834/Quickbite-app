@@ -53,6 +53,45 @@ public class RestaurantController {
         return restaurantService.createRestaurant(request);
     }
 
+    @PostMapping("/apply")
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CREATED)
+    public Restaurant applyForRestaurant(@RequestBody CreateRestaurantRequest request) {
+        validate(request);
+        Long authenticatedUserId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        if (authenticatedUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Must be logged in to apply");
+        }
+        return restaurantService.applyForRestaurant(request, authenticatedUserId);
+    }
+
+    @GetMapping("/my-applications")
+    public List<Restaurant> getMyApplications() {
+        Long authenticatedUserId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        if (authenticatedUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Must be logged in");
+        }
+        return restaurantService.getMyApplications(authenticatedUserId);
+    }
+
+    @PostMapping("/{restaurantId}/staff-requests")
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CREATED)
+    public RestaurantStaffProfile requestStaffAccess(@org.springframework.web.bind.annotation.PathVariable Long restaurantId) {
+        Long authenticatedUserId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        if (authenticatedUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Must be logged in to apply");
+        }
+        return restaurantService.applyForStaff(restaurantId, authenticatedUserId);
+    }
+
+    @GetMapping("/my-staff-requests")
+    public List<RestaurantStaffProfile> getMyStaffRequests() {
+        Long authenticatedUserId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        if (authenticatedUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Must be logged in");
+        }
+        return restaurantService.getMyStaffRequests(authenticatedUserId);
+    }
+
     private void validate(CreateRestaurantRequest request) {
         if (request.name() == null || request.name().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name must not be blank");

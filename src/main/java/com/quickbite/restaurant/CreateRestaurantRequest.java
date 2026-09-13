@@ -4,6 +4,14 @@ public record CreateRestaurantRequest(
         String name,
         String cuisine,
         String location,
-        Double rating
+        Double rating,
+        String address,
+        String city,
+        String area,
+        Double latitude,
+        Double longitude,
+        String openingHours,
+        Double deliveryRadius,
+        String coverImageUrl
 ) {
 }

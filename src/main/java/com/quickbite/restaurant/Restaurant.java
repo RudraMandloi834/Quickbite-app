@@ -34,6 +34,11 @@ public class Restaurant {
     private Double deliveryRadius;
     private String coverImageUrl;
 
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    private RestaurantStatus status;
+    
+    private Long ownerId;
+
     protected Restaurant() {
     }
 
@@ -72,4 +77,18 @@ public class Restaurant {
     public String getOpeningHours() { return openingHours; }
     public Double getDeliveryRadius() { return deliveryRadius; }
     public String getCoverImageUrl() { return coverImageUrl; }
+
+    public RestaurantStatus getStatus() {
+        return status != null ? status : RestaurantStatus.APPROVED;
+    }
+    public void setStatus(RestaurantStatus status) {
+        this.status = status;
+    }
+
+    public Long getOwnerId() {
+        return ownerId;
+    }
+    public void setOwnerId(Long ownerId) {
+        this.ownerId = ownerId;
+    }
 }
