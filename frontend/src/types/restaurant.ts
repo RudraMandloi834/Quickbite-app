@@ -7,6 +7,7 @@ export interface Restaurant {
   coverImageUrl?: string;
   distanceKm?: number;
   city?: string;
+  status?: string;
 }
 
 export interface MenuItem {
@@ -17,4 +18,13 @@ export interface MenuItem {
   price: number;
   available: boolean;
   imageUrl?: string;
+}
+
+export interface RestaurantStaffProfile {
+  id: number;
+  userId: number;
+  restaurantId: number;
+  approvalStatus: string;
+  createdAt?: string;
+  approvedAt?: string;
 }

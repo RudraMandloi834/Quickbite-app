@@ -27,7 +27,7 @@ export function Navbar() {
         <nav className="hidden md:flex gap-8 text-sm font-medium text-brand-muted">
           <Link href="/" className="hover:text-brand-fg transition-colors">Discover</Link>
           <Link href="/restaurants" className="hover:text-brand-fg transition-colors">Top Rated</Link>
-          <Link href="/offers" className="hover:text-brand-fg transition-colors">Offers</Link>
+          <Link href="/restaurant/onboarding-status" className="hover:text-brand-fg transition-colors font-semibold text-brand-primary">Partner</Link>
         </nav>
 
         <div className="flex items-center gap-5">

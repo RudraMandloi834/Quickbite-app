@@ -1,4 +1,4 @@
-import { Restaurant, MenuItem } from "@/types/restaurant";
+import { Restaurant, MenuItem, RestaurantStaffProfile } from "@/types/restaurant";
 import { Cart, CartItem, CreateCartRequest, AddCartItemRequest } from "@/types/cart";
 import { Customer } from "@/types/customer";
 import { Order } from "@/types/order";
@@ -213,5 +213,45 @@ export async function updateDeliveryStatus(deliveryId: number, status: string): 
     body: JSON.stringify({ status }),
   });
   if (!res.ok) throw new ApiError(await res.text(), res.status);
+  return res.json();
+}
+
+// --- Restaurant Onboarding Endpoints ---
+
+export async function applyForRestaurant(data: any): Promise<Restaurant> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/apply`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "Unknown error");
+    throw new ApiError(`Failed to apply: ${errorText}`, res.status);
+  }
+  return res.json();
+}
+
+export async function requestStaffAccess(restaurantId: number): Promise<RestaurantStaffProfile> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/staff-requests`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "Unknown error");
+    throw new ApiError(`Failed to request staff access: ${errorText}`, res.status);
+  }
+  return res.json();
+}
+
+export async function getMyApplications(): Promise<Restaurant[]> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/my-applications`);
+  if (!res.ok) throw new ApiError(`Failed to fetch applications`, res.status);
+  return res.json();
+}
+
+export async function getMyStaffRequests(): Promise<RestaurantStaffProfile[]> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/my-staff-requests`);
+  if (!res.ok) throw new ApiError(`Failed to fetch staff requests`, res.status);
   return res.json();
 }
