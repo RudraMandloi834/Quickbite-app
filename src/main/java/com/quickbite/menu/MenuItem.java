@@ -67,4 +67,9 @@ public class MenuItem {
     public String getImageUrl() {
         return imageUrl;
     }
+    public void setName(String name) { this.name = name; }
+    public void setDescription(String description) { this.description = description; }
+    public void setPrice(BigDecimal price) { this.price = price; }
+    public void setAvailable(boolean available) { this.available = available; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 }
