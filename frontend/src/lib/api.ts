@@ -53,7 +53,7 @@ export class ApiError extends Error {
   }
 }
 
-async function authFetch(url: string, options: RequestInit = {}) {
+export async function authFetch(url: string, options: RequestInit = {}) {
   const headers = { ...options.headers, ...getAuthHeaders() };
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
@@ -278,4 +278,43 @@ export const rejectRestaurant = async (restaurantId: number, reason: string): Pr
   });
   if (!res.ok) throw new Error("Failed to reject restaurant");
   return res.json();
+};
+
+export const getRestaurantDashboardSummary = async (restaurantId: number) => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/dashboard-summary`);
+  if (!res.ok) throw new Error("Failed to fetch dashboard summary");
+  return res.json();
+};
+
+export const getRestaurantOrders = async (restaurantId: number) => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/orders`);
+  if (!res.ok) throw new Error("Failed to fetch orders");
+  return res.json();
+};
+
+export const updateRestaurantOrderStatus = async (restaurantId: number, orderId: number, status: string) => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/orders/${orderId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+  if (!res.ok) throw new Error("Failed to update order status");
+  return res.json();
+};
+
+export const updateMenuItem = async (restaurantId: number, menuItemId: number, data: any) => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/menu/${menuItemId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error("Failed to update menu item");
+  return res.json();
+};
+
+export const deleteMenuItem = async (restaurantId: number, menuItemId: number) => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/menu/${menuItemId}`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error("Failed to delete menu item");
 };

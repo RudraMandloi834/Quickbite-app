@@ -54,4 +54,46 @@ public class MenuItemService {
         );
         return menuItemRepository.save(menuItem);
     }
+
+    public MenuItem updateMenuItem(Long restaurantId, Long menuItemId, CreateMenuItemRequest request) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
+        if (restaurant.getStatus() != null && restaurant.getStatus() != RestaurantStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant is not approved");
+        }
+        Long userId = SecurityUtils.getAuthenticatedCustomerId();
+        if (userId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+        if (!restaurantService.hasRestaurantAccess(restaurantId, userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        MenuItem menuItem = menuItemRepository.findById(menuItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Menu item not found"));
+        if (!menuItem.getRestaurantId().equals(restaurantId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Menu item does not belong to this restaurant");
+        }
+        menuItem.setName(request.name());
+        menuItem.setDescription(request.description());
+        menuItem.setPrice(request.price());
+        menuItem.setAvailable(request.available());
+        return menuItemRepository.save(menuItem);
+    }
+
+    public void deleteMenuItem(Long restaurantId, Long menuItemId) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Restaurant not found"));
+        if (restaurant.getStatus() != null && restaurant.getStatus() != RestaurantStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant is not approved");
+        }
+        Long userId = SecurityUtils.getAuthenticatedCustomerId();
+        if (userId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
+        if (!restaurantService.hasRestaurantAccess(restaurantId, userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        MenuItem menuItem = menuItemRepository.findById(menuItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Menu item not found"));
+        if (!menuItem.getRestaurantId().equals(restaurantId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Menu item does not belong to this restaurant");
+        }
+        menuItemRepository.delete(menuItem);
+    }
 }

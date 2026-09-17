@@ -52,4 +52,23 @@ public class MenuItemController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Available must be provided");
         }
     }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{menuItemId}")
+    public MenuItem updateMenuItem(
+            @PathVariable Long restaurantId,
+            @PathVariable Long menuItemId,
+            @RequestBody CreateMenuItemRequest request
+    ) {
+        validate(request);
+        return menuItemService.updateMenuItem(restaurantId, menuItemId, request);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{menuItemId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMenuItem(
+            @PathVariable Long restaurantId,
+            @PathVariable Long menuItemId
+    ) {
+        menuItemService.deleteMenuItem(restaurantId, menuItemId);
+    }
 }

@@ -25,9 +25,9 @@ export function Navbar() {
         </Link>
         
         <nav className="hidden md:flex gap-8 text-sm font-medium text-brand-muted">
+          <Link href="/restaurant/dashboard" className="hover:text-brand-fg transition-colors font-semibold text-brand-primary">Partner</Link>
           <Link href="/" className="hover:text-brand-fg transition-colors">Discover</Link>
           <Link href="/restaurants" className="hover:text-brand-fg transition-colors">Top Rated</Link>
-          <Link href="/restaurant/onboarding-status" className="hover:text-brand-fg transition-colors font-semibold text-brand-primary">Partner</Link>
           {user?.roles?.includes("ROLE_OPERATOR") && <Link href="/operator/restaurants" className="hover:text-brand-fg transition-colors font-semibold text-purple-600">Operator</Link>}
         </nav>
 
