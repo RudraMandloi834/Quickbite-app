@@ -11,6 +11,7 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
     List<Restaurant> findApprovedRestaurants();
 
     List<Restaurant> findByOwnerId(Long ownerId);
+    List<Restaurant> findByStatus(RestaurantStatus status);
 
     @Query(value = "SELECT id, name, cuisine, location, rating, address, city, area, latitude, longitude, opening_hours AS openingHours, delivery_radius AS deliveryRadius, cover_image_url AS coverImageUrl, " +
            "(6371 * acos(cos(radians(:latitude)) * cos(radians(latitude)) * cos(radians(longitude) - radians(:longitude)) + sin(radians(:latitude)) * sin(radians(latitude)))) AS distanceKm " +

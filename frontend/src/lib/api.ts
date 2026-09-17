@@ -255,3 +255,27 @@ export async function getMyStaffRequests(): Promise<RestaurantStaffProfile[]> {
   if (!res.ok) throw new ApiError(`Failed to fetch staff requests`, res.status);
   return res.json();
 }
+
+export const getPendingRestaurants = async (): Promise<Restaurant[]> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/operator/restaurants/pending`);
+  if (!res.ok) throw new Error("Failed to fetch pending restaurants");
+  return res.json();
+};
+
+export const approveRestaurant = async (restaurantId: number): Promise<Restaurant> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/operator/restaurants/${restaurantId}/approve`, {
+    method: "POST"
+  });
+  if (!res.ok) throw new Error("Failed to approve restaurant");
+  return res.json();
+};
+
+export const rejectRestaurant = async (restaurantId: number, reason: string): Promise<Restaurant> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/operator/restaurants/${restaurantId}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason })
+  });
+  if (!res.ok) throw new Error("Failed to reject restaurant");
+  return res.json();
+};

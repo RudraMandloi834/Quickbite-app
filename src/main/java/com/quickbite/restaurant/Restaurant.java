@@ -24,7 +24,7 @@ public class Restaurant {
     private String cuisine;
     private String location; // legacy/frontend field
     private double rating;
-    
+
     private String address;
     private String city;
     private String area;
@@ -36,8 +36,19 @@ public class Restaurant {
 
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     private RestaurantStatus status;
-    
+
     private Long ownerId;
+
+    private Long reviewedBy;
+    private java.time.Instant reviewedAt;
+    private String rejectionReason;
+
+    public Long getReviewedBy() { return reviewedBy; }
+    public void setReviewedBy(Long reviewedBy) { this.reviewedBy = reviewedBy; }
+    public java.time.Instant getReviewedAt() { return reviewedAt; }
+    public void setReviewedAt(java.time.Instant reviewedAt) { this.reviewedAt = reviewedAt; }
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 
     protected Restaurant() {
     }

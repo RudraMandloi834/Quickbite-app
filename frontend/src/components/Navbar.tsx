@@ -28,6 +28,7 @@ export function Navbar() {
           <Link href="/" className="hover:text-brand-fg transition-colors">Discover</Link>
           <Link href="/restaurants" className="hover:text-brand-fg transition-colors">Top Rated</Link>
           <Link href="/restaurant/onboarding-status" className="hover:text-brand-fg transition-colors font-semibold text-brand-primary">Partner</Link>
+          {user?.roles?.includes("ROLE_OPERATOR") && <Link href="/operator/restaurants" className="hover:text-brand-fg transition-colors font-semibold text-purple-600">Operator</Link>}
         </nav>
 
         <div className="flex items-center gap-5">

@@ -93,6 +93,35 @@ public class RestaurantService {
         return restaurantRepository.findNearbyRestaurants(latitude, longitude, radiusKm, minLat, maxLat, minLon, maxLon);
     }
 
+    public List<Restaurant> getPendingRestaurants() {
+        return restaurantRepository.findByStatus(RestaurantStatus.PENDING_APPROVAL);
+    }
+
+    public Restaurant approveRestaurant(Long restaurantId, Long operatorId) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Restaurant not found"));
+        if (restaurant.getStatus() != RestaurantStatus.PENDING_APPROVAL) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Restaurant is not pending approval");
+        }
+        restaurant.setStatus(RestaurantStatus.APPROVED);
+        restaurant.setReviewedBy(operatorId);
+        restaurant.setReviewedAt(java.time.Instant.now());
+        return restaurantRepository.save(restaurant);
+    }
+
+    public Restaurant rejectRestaurant(Long restaurantId, Long operatorId, String reason) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Restaurant not found"));
+        if (restaurant.getStatus() != RestaurantStatus.PENDING_APPROVAL) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Restaurant is not pending approval");
+        }
+        restaurant.setStatus(RestaurantStatus.REJECTED);
+        restaurant.setReviewedBy(operatorId);
+        restaurant.setReviewedAt(java.time.Instant.now());
+        restaurant.setRejectionReason(reason);
+        return restaurantRepository.save(restaurant);
+    }
+
     public boolean hasRestaurantAccess(Long restaurantId, Long userId) {
         if (restaurantId == null || userId == null) return false;
         Restaurant restaurant = restaurantRepository.findById(restaurantId).orElse(null);
