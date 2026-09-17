@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class DeliveryServiceTest {
 
     @Mock
@@ -35,7 +36,8 @@ class DeliveryServiceTest {
 
     @BeforeEach
     void setUp() {
-        deliveryService = new DeliveryService(deliveryRepository, orderRepository, messagingTemplate);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(new com.quickbite.security.CustomUserDetails("test@test.com", "pass", java.util.Collections.emptyList(), 1L), null, java.util.Collections.emptyList()));
+        deliveryService = new DeliveryService(deliveryRepository, orderRepository, org.mockito.Mockito.mock(com.quickbite.restaurant.RestaurantService.class), messagingTemplate);
     }
 
     @Test
@@ -88,6 +90,7 @@ class DeliveryServiceTest {
     void getsExistingDelivery() {
         Delivery delivery = assignedDelivery();
         when(deliveryRepository.findById(1L)).thenReturn(Optional.of(delivery));
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(confirmedOrder()));
 
         assertEquals(delivery, deliveryService.getDelivery(1L));
     }
@@ -180,6 +183,7 @@ class DeliveryServiceTest {
         Delivery delivery = new Delivery(1L, "Rahul Driver", "9999999999", status);
         delivery.setDriver(1L, "Rahul Driver", "9999999999");
         when(deliveryRepository.findById(1L)).thenReturn(Optional.of(delivery));
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(confirmedOrder()));
         return delivery;
     }
 

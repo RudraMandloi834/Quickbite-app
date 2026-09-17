@@ -3,6 +3,7 @@ package com.quickbite.delivery;
 import com.quickbite.order.Order;
 import com.quickbite.order.OrderRepository;
 import com.quickbite.order.OrderStatus;
+import com.quickbite.restaurant.RestaurantService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,24 +12,75 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class DeliveryService {
 
-    private static final String SAMPLE_DRIVER_NAME = "Rahul Driver";
-    private static final String SAMPLE_DRIVER_PHONE = "9999999999";
-
     private final DeliveryRepository deliveryRepository;
     private final OrderRepository orderRepository;
+    private final RestaurantService restaurantService;
 
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
-    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate) {
+    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, RestaurantService restaurantService, org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate) {
         this.deliveryRepository = deliveryRepository;
         this.orderRepository = orderRepository;
+        this.restaurantService = restaurantService;
         this.messagingTemplate = messagingTemplate;
+    }
+
+    private void verifyDeliveryCreationAccess(Order order) {
+        Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated");
+        }
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR"))) {
+            return;
+        }
+
+        if (userId.equals(order.getCustomerId())) {
+            return;
+        }
+
+        if (restaurantService.hasRestaurantAccess(order.getRestaurantId(), userId)) {
+            return;
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to create delivery for this order");
+    }
+
+    private void verifyDeliveryAccess(Delivery delivery) {
+        Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated");
+        }
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR"))) {
+            return;
+        }
+
+        if (userId.equals(delivery.getDriverId())) {
+            return;
+        }
+
+        Order order = orderRepository.findById(delivery.getOrderId()).orElse(null);
+        if (order != null) {
+            if (userId.equals(order.getCustomerId())) {
+                return;
+            }
+            if (restaurantService.hasRestaurantAccess(order.getRestaurantId(), userId)) {
+                return;
+            }
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to this delivery");
     }
 
     @Transactional
     public Delivery createDeliveryForOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+
+        verifyDeliveryCreationAccess(order);
 
         if (order.getStatus() == OrderStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Pending orders cannot have a delivery");
@@ -52,27 +104,32 @@ public class DeliveryService {
     }
 
     public Delivery getDelivery(Long deliveryId) {
-        return deliveryRepository.findById(deliveryId)
+        Delivery delivery = deliveryRepository.findById(deliveryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
+        verifyDeliveryAccess(delivery);
+        return delivery;
     }
 
     public Delivery getDeliveryByOrderId(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        if (!order.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
-        }
-        return deliveryRepository.findByOrderId(orderId)
+
+        Delivery delivery = deliveryRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found for this order"));
+
+        verifyDeliveryAccess(delivery);
+        return delivery;
     }
 
     @Transactional
     public Delivery assignDriver(Long deliveryId, Long driverId, String driverName, String driverPhone) {
-        Delivery delivery = getDelivery(deliveryId);
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
+
         if (delivery.getStatus() != DeliveryStatus.ASSIGNING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery is not waiting for assignment");
         }
-        
+
         delivery.setDriver(driverId, driverName, driverPhone);
         delivery.updateStatus(DeliveryStatus.ASSIGNED);
         Delivery saved = deliveryRepository.save(delivery);
@@ -86,8 +143,9 @@ public class DeliveryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delivery status is required");
         }
 
-        Delivery delivery = getDelivery(deliveryId);
-        
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
+
         if (requestingDriverId != null && !requestingDriverId.equals(delivery.getDriverId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not assigned to this delivery");
         }

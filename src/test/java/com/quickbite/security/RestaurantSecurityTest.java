@@ -22,6 +22,6 @@ public class RestaurantSecurityTest {
         mockMvc.perform(post("/api/restaurants")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"Test\", \"cuisine\":\"Test\", \"location\":\"Test\", \"rating\":4.0}"))
-               .andExpect(status().isForbidden()); // Or isForbidden? Let's check status().is4xxClientError() first
+               .andExpect(status().isUnauthorized()); // Or isForbidden? Let's check status().is4xxClientError() first
     }
 }

@@ -65,14 +65,14 @@ public class RestaurantService {
     public RestaurantStaffProfile applyForStaff(Long restaurantId, Long userId) {
         restaurantRepository.findById(restaurantId)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Restaurant not found"));
-            
+
         List<RestaurantStaffProfile> existingProfiles = staffProfileRepository.findByUserIdAndRestaurantId(userId, restaurantId);
         for (RestaurantStaffProfile profile : existingProfiles) {
             if (profile.getApprovalStatus() == StaffRequestStatus.PENDING_APPROVAL) {
                 throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Duplicate pending staff request");
             }
         }
-            
+
         RestaurantStaffProfile profile = new RestaurantStaffProfile(userId, restaurantId);
         return staffProfileRepository.save(profile);
     }
@@ -84,12 +84,27 @@ public class RestaurantService {
     public List<NearbyRestaurantProjection> getNearbyRestaurants(double latitude, double longitude, double radiusKm) {
         double latDelta = radiusKm / 111.0;
         double lonDelta = radiusKm / (111.0 * Math.cos(Math.toRadians(latitude)));
-        
+
         double minLat = latitude - latDelta;
         double maxLat = latitude + latDelta;
         double minLon = longitude - lonDelta;
         double maxLon = longitude + lonDelta;
-        
+
         return restaurantRepository.findNearbyRestaurants(latitude, longitude, radiusKm, minLat, maxLat, minLon, maxLon);
+    }
+
+    public boolean hasRestaurantAccess(Long restaurantId, Long userId) {
+        if (restaurantId == null || userId == null) return false;
+        Restaurant restaurant = restaurantRepository.findById(restaurantId).orElse(null);
+        if (restaurant == null) return false;
+        if (restaurant.getOwnerId() != null && restaurant.getOwnerId().equals(userId)) return true;
+
+        List<RestaurantStaffProfile> profiles = staffProfileRepository.findByUserIdAndRestaurantId(userId, restaurantId);
+        for (RestaurantStaffProfile profile : profiles) {
+            if (profile.getApprovalStatus() == StaffRequestStatus.APPROVED) {
+                return true;
+            }
+        }
+        return false;
     }
 }

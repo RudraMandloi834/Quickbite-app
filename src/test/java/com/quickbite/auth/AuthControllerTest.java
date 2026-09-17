@@ -40,7 +40,7 @@ public class AuthControllerTest {
     @Test
     void testSignupSuccess() throws Exception {
         SignupRequest request = new SignupRequest("Test User", "testnew@example.com", "password123");
-        
+
         mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -93,13 +93,13 @@ public class AuthControllerTest {
         mockMvc.perform(post("/api/carts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"customerId\":1, \"restaurantId\":1}"))
-                .andExpect(status().isForbidden()); // or isUnauthorized 
+                .andExpect(status().isUnauthorized()); // or isUnauthorized
     }
 
     @Test
     void testProtectedEndpointWithValidJwt() throws Exception {
         Customer c = new Customer("Login User", "validjwt@example.com", null, passwordEncoder.encode("secret"));
-        c = customerRepository.save(c);
+        c = customerRepository.save(c); com.quickbite.restaurant.Restaurant r = new com.quickbite.restaurant.Restaurant("R1", "C", "L", 5.0, "A", "C", "A", 0.0, 0.0, "H", 5.0, "img"); r.setStatus(com.quickbite.restaurant.RestaurantStatus.APPROVED); r = org.springframework.web.context.support.WebApplicationContextUtils.getRequiredWebApplicationContext(mockMvc.getDispatcherServlet().getServletContext()).getBean(com.quickbite.restaurant.RestaurantRepository.class).save(r);
 
         AuthRequest request = new AuthRequest("validjwt@example.com", "secret");
         String responseBody = mockMvc.perform(post("/api/auth/login")
@@ -112,7 +112,7 @@ public class AuthControllerTest {
         mockMvc.perform(post("/api/carts")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"customerId\":" + c.getId() + ", \"restaurantId\":1}"))
+                .content("{\"customerId\":" + c.getId() + ", \"restaurantId\":" + r.getId() + "}"))
                 .andExpect(status().isCreated());
     }
 }
