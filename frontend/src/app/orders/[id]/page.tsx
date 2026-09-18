@@ -15,13 +15,18 @@ import { Restaurant } from "@/types/restaurant";
 import { Delivery } from "@/types/delivery";
 import { useAuth } from "@/context/AuthContext";
 import { DeliveryTracker } from "@/components/DeliveryTracker";
-import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
+import { useSSE } from "@/hooks/useSSE";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { user, loading, requireAuth } = useAuth();
   const { id } = use(params);
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const { connectionStatus } = useSSE(token, (event: any) => {
+    if (event.orderId === Number(id)) {
+      loadOrderData();
+    }
+  });
 
   const [order, setOrder] = useState<Order | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -107,71 +112,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   }, [id, router, loading, user, requireAuth]);
 
   // WebSocket Connection
-  useEffect(() => {
-    if (!delivery || delivery.status === "DELIVERED" || delivery.status === "CANCELLED") return;
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const client = new Client({
-      webSocketFactory: () => new SockJS(`${getWsBaseUrl()}/ws`),
-      connectHeaders: {
-        Authorization: `Bearer ${token}`
-      },
-      reconnectDelay: 5000,
-      heartbeatIncoming: 4000,
-      heartbeatOutgoing: 4000,
-    });
-
-    client.onConnect = () => {
-      console.log("[STOMP] Connected successfully to the backend!");
-      setWsStatus(prev => {
-        if (prev === "reconnecting") {
-          console.log("[STOMP] Reconnected, fetching latest delivery state...");
-          getDeliveryByOrderId(id).then(setDelivery).catch(console.error);
-        }
-        return "connected";
-      });
-      const topic = `/topic/deliveries/${delivery.id}`;
-      console.log(`[STOMP] Subscribing to destination: ${topic}`);
-      client.subscribe(topic, (message) => {
-        console.log(`[STOMP] Received message on ${topic}:`, message.body);
-        try {
-          const event = JSON.parse(message.body);
-          setDelivery(prev => {
-            if (!prev) return prev;
-            console.log(`[STOMP] Updating delivery status from ${prev.status} to ${event.status}`);
-            const updated = { ...prev, status: event.status };
-            const timestamp = event.timestamp;
-            if (event.status === "ASSIGNED") updated.assignedAt = timestamp;
-            else if (event.status === "PICKED_UP") updated.pickedUpAt = timestamp;
-            else if (event.status === "OUT_FOR_DELIVERY") updated.outForDeliveryAt = timestamp;
-            else if (event.status === "DELIVERED") updated.deliveredAt = timestamp;
-            return updated;
-          });
-        } catch (e) {
-          console.error("[STOMP] Failed to parse delivery event", e);
-        }
-      });
-    };
-
-    client.onWebSocketClose = () => {
-      console.log("[STOMP] WebSocket closed");
-      setWsStatus(prev => prev === "connected" ? "reconnecting" : prev);
-    };
-    client.onWebSocketError = (error) => {
-      console.error("[STOMP] WebSocket error:", error);
-      setWsStatus("reconnecting");
-    };
-
-    setWsStatus("connecting");
-    client.activate();
-
-    return () => {
-      client.deactivate();
-      setWsStatus("disconnected");
-    };
-  }, [delivery?.id]); // Only re-run if delivery ID changes
+   // Only re-run if delivery ID changes
 
   const handleRetry = () => {
     setIsLoading(true);

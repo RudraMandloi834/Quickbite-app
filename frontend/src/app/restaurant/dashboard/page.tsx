@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Restaurant, MenuItem } from "@/types/restaurant";
 import { getRestaurantDashboardSummary, getRestaurantOrders, updateRestaurantOrderStatus, updateMenuItem, deleteMenuItem, createInvitation, authFetch, getApiBaseUrl, getJoinRequestsForRestaurant, approveJoinRequest, rejectJoinRequest, RestaurantJoinRequest } from "@/lib/api";
-import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
+import { useSSE } from "@/hooks/useSSE";
 type OrderEvent = { orderId: number; restaurantId: number; status: string; };
 
 type DashboardSummary = { status: string; pendingOrders: number; activeOrders: number; activeMenuItems: number; };
@@ -15,6 +14,12 @@ type DashboardSummary = { status: string; pendingOrders: number; activeOrders: n
 type DashboardOrder = { id: number; status: string; totalAmount: number; };
 
 export default function RestaurantDashboard() {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const { connectionStatus } = useSSE(token, (event: any) => {
+    if (selectedRestaurantId && (event.restaurantId === selectedRestaurantId || !event.restaurantId)) {
+      loadDashboardData(selectedRestaurantId);
+    }
+  });
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   
@@ -32,10 +37,9 @@ export default function RestaurantDashboard() {
   const [error, setError] = useState("");
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState("Offline");
   
-  const stompClient = useRef<Client | null>(null);
-
+  
+  
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -48,65 +52,11 @@ export default function RestaurantDashboard() {
   useEffect(() => {
     if (selectedRestaurantId) {
       loadDashboardData(selectedRestaurantId);
-      connectWebSocket(selectedRestaurantId);
+      
     }
-    return () => {
-      if (stompClient.current) {
-        stompClient.current.deactivate();
-      }
-    };
-  }, [selectedRestaurantId]);
+    }, [selectedRestaurantId]);
 
-  function connectWebSocket(restaurantId: number) {
-    if (stompClient.current) {
-      stompClient.current.deactivate();
-    }
-    const token = localStorage.getItem("token");
-    const wsUrl = getApiBaseUrl().replace(/^http/, 'ws') + "/ws";
-    
-    setConnectionStatus("Reconnecting");
-    
-    const client = new Client({
-      webSocketFactory: () => new SockJS(getApiBaseUrl() + "/ws"),
-      connectHeaders: {
-        Authorization: `Bearer ${token}`
-      },
-      reconnectDelay: 5000,
-      onConnect: () => {
-        setConnectionStatus("Connected");
-        client.subscribe(`/topic/restaurants/${restaurantId}/orders`, (message) => {
-          const event = JSON.parse(message.body);
-          if (event.restaurantId === restaurantId) {
-             handleOrderEvent(event);
-          }
-        });
-      },
-      onStompError: () => {
-        setConnectionStatus("Offline");
-      },
-      onWebSocketClose: () => {
-        setConnectionStatus("Offline");
-      }
-    });
-    
-    client.activate();
-    stompClient.current = client;
-  };
-
-  function handleOrderEvent(event: OrderEvent) {
-    setOrders(prev => {
-      const exists = prev.find(o => o.id === event.orderId);
-      if (exists) {
-        return prev.map(o => o.id === event.orderId ? { ...o, status: event.status } : o);
-      } else {
-        // Fetch fresh order details or just inject the event (for simplicity, we refetch everything to get items)
-        loadDashboardData(event.restaurantId);
-        return prev;
-      }
-    });
-    // Update summary counters as well
-    loadDashboardData(event.restaurantId);
-  };
+  
 
   const fetchAccessibleRestaurants = async () => {
     try {

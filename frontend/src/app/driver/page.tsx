@@ -8,6 +8,8 @@ import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
+import { useSSE } from "@/hooks/useSSE";
+
 import {
   getAvailableDeliveries, getWsBaseUrl,
   getMyDeliveries,
@@ -17,6 +19,10 @@ import {
 import { Delivery } from "@/types/delivery";
 
 export default function DriverDashboardPage() {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const { connectionStatus } = useSSE(token, (event: any) => {
+    fetchDeliveries();
+  });
   const router = useRouter();
   const { user, loading, requireAuth } = useAuth();
   
@@ -47,40 +53,7 @@ export default function DriverDashboardPage() {
     }
   }, [loading, user, requireAuth]);
 
-  useEffect(() => {
-    fetchDeliveries();
-  }, [fetchDeliveries]);
-
-  // WebSocket Connection for Auto-refresh
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token || !user || !user.roles?.includes("DRIVER")) return;
-
-    import("@stomp/stompjs").then(({ Client }) => {
-      import("sockjs-client").then((SockJS) => {
-
-        const client = new Client({
-          webSocketFactory: () => new SockJS.default(`${getWsBaseUrl()}/ws`),
-          connectHeaders: {
-            Authorization: `Bearer ${token}`
-          },
-          reconnectDelay: 5000,
-        });
-
-        client.onConnect = () => {
-          client.subscribe(`/topic/deliveries`, () => {
-            fetchDeliveries();
-          });
-        };
-
-        client.activate();
-
-        return () => {
-          client.deactivate();
-        };
-      });
-    });
-  }, [user, fetchDeliveries]);
+  
 
   const handleAssign = async (deliveryId: number) => {
     try {

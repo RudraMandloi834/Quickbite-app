@@ -30,7 +30,7 @@ class DeliveryServiceTest {
     private OrderRepository orderRepository;
 
     @Mock
-    private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+    private com.quickbite.event.SseService sseService;
 
     @org.mockito.Mock
     private DeliveryStatusHistoryRepository historyRepository;
@@ -40,7 +40,7 @@ class DeliveryServiceTest {
     @BeforeEach
     void setUp() {
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(new com.quickbite.security.CustomUserDetails("test@test.com", "pass", java.util.Collections.emptyList(), 1L), null, java.util.Collections.emptyList()));
-        deliveryService = new DeliveryService(deliveryRepository, orderRepository, org.mockito.Mockito.mock(com.quickbite.restaurant.RestaurantService.class), messagingTemplate, historyRepository);
+        deliveryService = new DeliveryService(deliveryRepository, orderRepository, org.mockito.Mockito.mock(com.quickbite.restaurant.RestaurantService.class), sseService, historyRepository);
     }
 
     @Test
@@ -152,7 +152,7 @@ class DeliveryServiceTest {
         updateExistingDelivery(DeliveryStatus.AVAILABLE);
 
         assertStatus(HttpStatus.CONFLICT, () -> deliveryService.updateStatus(1L, DeliveryStatus.DELIVERED, 1L));
-        org.mockito.Mockito.verifyNoInteractions(messagingTemplate);
+        org.mockito.Mockito.verifyNoInteractions(sseService);
     }
 
     @Test
@@ -160,7 +160,7 @@ class DeliveryServiceTest {
         updateExistingDelivery(DeliveryStatus.DELIVERED);
 
         assertStatus(HttpStatus.CONFLICT, () -> deliveryService.updateStatus(1L, DeliveryStatus.PICKED_UP, 1L));
-        org.mockito.Mockito.verifyNoInteractions(messagingTemplate);
+        org.mockito.Mockito.verifyNoInteractions(sseService);
     }
 
     @Test
@@ -169,7 +169,7 @@ class DeliveryServiceTest {
         delivery.setDriver(99L, "Other Driver", "111");
 
         assertStatus(HttpStatus.FORBIDDEN, () -> deliveryService.updateStatus(1L, DeliveryStatus.PICKED_UP, 1L));
-        org.mockito.Mockito.verifyNoInteractions(messagingTemplate);
+        org.mockito.Mockito.verifyNoInteractions(sseService);
     }
 
     private Order confirmedOrder() {

@@ -4,6 +4,9 @@ import java.util.List;
 import java.security.SecureRandom;
 import java.util.Base64;
 import org.springframework.stereotype.Service;
+import com.quickbite.event.SseService;
+import com.quickbite.event.SystemEvent;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import com.quickbite.customer.Customer;
@@ -15,6 +18,7 @@ public class RestaurantService {
 
     private final RestaurantRepository restaurantRepository;
     private final RestaurantStaffProfileRepository staffProfileRepository;
+    private final SseService sseService;
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
     private final RestaurantInvitationRepository invitationRepository;
@@ -25,9 +29,11 @@ public class RestaurantService {
                              CustomerRepository customerRepository,
                              RestaurantInvitationRepository invitationRepository,
                              RestaurantJoinRequestRepository joinRequestRepository,
-                             PasswordEncoder passwordEncoder) {
+                             PasswordEncoder passwordEncoder,
+                             com.quickbite.event.SseService sseService) {
         this.restaurantRepository = restaurantRepository;
         this.staffProfileRepository = staffProfileRepository;
+        this.sseService = sseService;
         this.customerRepository = customerRepository;
         this.passwordEncoder = passwordEncoder;
         this.invitationRepository = invitationRepository;
@@ -154,6 +160,9 @@ public class RestaurantService {
         staff.setApprovalStatus(StaffRequestStatus.APPROVED);
         staffProfileRepository.save(staff);
 
+                sseService.emitToRestaurant(restaurant.getOwnerId(), new SystemEvent(
+            UUID.randomUUID().toString(), "RESTAURANT_APPROVED", null, restaurant.getId(), restaurant.getOwnerId(), null, "APPROVED"
+        ));
         return new ApprovalResponse(restaurant, username, rawPassword);
     }
 
@@ -239,7 +248,11 @@ public class RestaurantService {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Access denied");
         }
         req.setStatus(StaffRequestStatus.APPROVED);
-        return joinRequestRepository.save(req);
+        RestaurantJoinRequest saved = joinRequestRepository.save(req);
+        sseService.emitToRestaurant(saved.getUserId(), new SystemEvent(
+            UUID.randomUUID().toString(), "JOIN_REQUEST_APPROVED", null, saved.getRestaurantId(), saved.getUserId(), null, "APPROVED"
+        ));
+        return saved;
     }
 
     public RestaurantJoinRequest rejectJoinRequest(Long requestId, Long ownerId) {

@@ -1,5 +1,9 @@
 package com.quickbite.delivery;
 
+import java.util.UUID;
+import com.quickbite.event.SystemEvent;
+import com.quickbite.event.SseService;
+
 import com.quickbite.order.Order;
 import com.quickbite.order.OrderRepository;
 import com.quickbite.order.OrderStatus;
@@ -19,14 +23,14 @@ public class DeliveryService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.quickbite.order.OrderLifecycleService orderLifecycleService;
 
-    private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+    private final com.quickbite.event.SseService sseService;
     private final DeliveryStatusHistoryRepository historyRepository;
 
-    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, RestaurantService restaurantService, org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate, DeliveryStatusHistoryRepository historyRepository) {
+    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, RestaurantService restaurantService, com.quickbite.event.SseService sseService, DeliveryStatusHistoryRepository historyRepository) {
         this.deliveryRepository = deliveryRepository;
         this.orderRepository = orderRepository;
         this.restaurantService = restaurantService;
-        this.messagingTemplate = messagingTemplate;
+        this.sseService = sseService;
         this.historyRepository = historyRepository;
     }
 
@@ -190,14 +194,21 @@ public class DeliveryService {
     }
 
     private void publishDeliveryEvent(Delivery delivery) {
-        DeliveryStatusEvent event = new DeliveryStatusEvent(
-                delivery.getId(),
+        SystemEvent sysEvent = new SystemEvent(
+                UUID.randomUUID().toString(),
+                "DELIVERY_" + delivery.getStatus().name(),
                 delivery.getOrderId(),
-                delivery.getStatus(),
-                delivery.getUpdatedAt()
+                null,
+                null,
+                delivery.getDriverId(),
+                delivery.getStatus().name()
         );
-        messagingTemplate.convertAndSend("/topic/deliveries/" + delivery.getId(), event);
-        messagingTemplate.convertAndSend("/topic/deliveries", event);
+        if (delivery.getDriverId() != null) {
+            sseService.emitToDriver(delivery.getDriverId(), sysEvent);
+        } else {
+            sseService.emitToAllDrivers(sysEvent);
+        }
+        sseService.emitToAdmins(sysEvent);
     }
 
     public java.util.List<Delivery> getAvailableDeliveries() {
