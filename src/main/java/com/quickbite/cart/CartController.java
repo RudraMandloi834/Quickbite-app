@@ -31,12 +31,22 @@ public class CartController {
     @ResponseStatus(HttpStatus.CREATED)
     public CartItem addItem(@PathVariable Long cartId, @RequestBody AddCartItemRequest request) {
         validateAddCartItemRequest(request);
+        Cart cart = cartService.getCart(cartId);
+        boolean isOperator = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR"));
+        if (!cart.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId()) && !isOperator) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access another user's cart");
+        }
         return cartService.addItem(cartId, request);
     }
 
     @GetMapping("/{cartId}")
     public Cart getCart(@PathVariable Long cartId) {
-        return cartService.getCart(cartId);
+        Cart cart = cartService.getCart(cartId);
+        boolean isOperator = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR"));
+        if (!cart.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId()) && !isOperator) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access another user's cart");
+        }
+        return cart;
     }
 
     private void validateCreateCartRequest(CreateCartRequest request) {

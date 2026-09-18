@@ -46,10 +46,16 @@ public class CustomerController {
 
     @GetMapping("/{customerId}")
     public Customer getCustomer(@PathVariable Long customerId) {
+        Long authId = SecurityUtils.getAuthenticatedCustomerId();
+        boolean isOperator = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR"));
+        if (!customerId.equals(authId) && !isOperator) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access another user's profile");
+        }
         return customerService.getCustomer(customerId);
     }
 
     @GetMapping
+        @org.springframework.security.access.prepost.PreAuthorize("hasRole('OPERATOR')")
     public List<Customer> getAllCustomers() {
         return customerService.getAllCustomers();
     }
