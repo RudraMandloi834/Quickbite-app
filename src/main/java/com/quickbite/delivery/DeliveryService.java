@@ -20,12 +20,14 @@ public class DeliveryService {
     private com.quickbite.order.OrderLifecycleService orderLifecycleService;
 
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+    private final DeliveryStatusHistoryRepository historyRepository;
 
-    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, RestaurantService restaurantService, org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate) {
+    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, RestaurantService restaurantService, org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate, DeliveryStatusHistoryRepository historyRepository) {
         this.deliveryRepository = deliveryRepository;
         this.orderRepository = orderRepository;
         this.restaurantService = restaurantService;
         this.messagingTemplate = messagingTemplate;
+        this.historyRepository = historyRepository;
     }
 
     private void verifyDeliveryCreationAccess(Order order) {
@@ -98,12 +100,16 @@ public class DeliveryService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery already exists for this order");
         }
 
-        return deliveryRepository.save(new Delivery(
+        Delivery delivery = deliveryRepository.save(new Delivery(
                 orderId,
                 null,
                 null,
-                DeliveryStatus.ASSIGNING
+                DeliveryStatus.AVAILABLE
         ));
+        Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        String role = "ROLE_SYSTEM";
+        historyRepository.save(new DeliveryStatusHistory(delivery.getId(), null, DeliveryStatus.AVAILABLE, userId, role, "Delivery created"));
+        return delivery;
     }
 
     
@@ -136,13 +142,15 @@ public class DeliveryService {
         Delivery delivery = deliveryRepository.findById(deliveryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
 
-        if (delivery.getStatus() != DeliveryStatus.ASSIGNING) {
+        if (delivery.getStatus() != DeliveryStatus.AVAILABLE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery is not waiting for assignment");
         }
 
+        DeliveryStatus previousStatus = delivery.getStatus();
         delivery.setDriver(driverId, driverName, driverPhone);
         delivery.updateStatus(DeliveryStatus.ASSIGNED);
         Delivery saved = deliveryRepository.save(delivery);
+        historyRepository.save(new DeliveryStatusHistory(saved.getId(), previousStatus, DeliveryStatus.ASSIGNED, driverId, "ROLE_DRIVER", "Driver assigned"));
         orderLifecycleService.transitionOrder(saved.getOrderId(), com.quickbite.order.OrderStatus.DRIVER_ASSIGNED, driverId, "ROLE_DRIVER", "Driver assigned");
         publishDeliveryEvent(saved);
         return saved;
@@ -165,8 +173,11 @@ public class DeliveryService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invalid delivery status transition");
         }
 
+        DeliveryStatus previousStatus = delivery.getStatus();
         delivery.updateStatus(status);
         Delivery saved = deliveryRepository.save(delivery);
+        Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        historyRepository.save(new DeliveryStatusHistory(saved.getId(), previousStatus, status, userId, "ROLE_DRIVER", "Delivery update"));
         com.quickbite.order.OrderStatus newOrderStatus = null;
         if (status == DeliveryStatus.PICKED_UP) newOrderStatus = com.quickbite.order.OrderStatus.PICKED_UP;
         if (status == DeliveryStatus.OUT_FOR_DELIVERY) newOrderStatus = com.quickbite.order.OrderStatus.OUT_FOR_DELIVERY;
@@ -190,7 +201,7 @@ public class DeliveryService {
     }
 
     public java.util.List<Delivery> getAvailableDeliveries() {
-        return deliveryRepository.findByStatus(DeliveryStatus.ASSIGNING);
+        return deliveryRepository.findByStatus(DeliveryStatus.AVAILABLE);
     }
 
     public java.util.List<Delivery> getDeliveriesByDriver(Long driverId) {
@@ -198,7 +209,7 @@ public class DeliveryService {
     }
 
     private boolean isAllowedTransition(DeliveryStatus currentStatus, DeliveryStatus newStatus) {
-        return (currentStatus == DeliveryStatus.ASSIGNING && newStatus == DeliveryStatus.ASSIGNED)
+        return (currentStatus == DeliveryStatus.AVAILABLE && newStatus == DeliveryStatus.ASSIGNED)
                 || (currentStatus == DeliveryStatus.ASSIGNED && newStatus == DeliveryStatus.PICKED_UP)
                 || (currentStatus == DeliveryStatus.PICKED_UP && newStatus == DeliveryStatus.OUT_FOR_DELIVERY)
                 || (currentStatus == DeliveryStatus.OUT_FOR_DELIVERY && newStatus == DeliveryStatus.DELIVERED);

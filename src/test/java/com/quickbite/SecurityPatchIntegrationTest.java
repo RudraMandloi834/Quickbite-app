@@ -90,7 +90,7 @@ public class SecurityPatchIntegrationTest {
         orderRepository.save(o2);
         orderId2 = o2.getId();
 
-        Delivery del1 = new Delivery(orderId1, null, null, DeliveryStatus.ASSIGNING);
+        Delivery del1 = new Delivery(orderId1, null, null, DeliveryStatus.AVAILABLE);
         deliveryRepository.save(del1);
         deliveryId1 = del1.getId();
     }

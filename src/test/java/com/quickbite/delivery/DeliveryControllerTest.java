@@ -38,7 +38,7 @@ class DeliveryControllerTest {
     @Test
     void createsDeliveryWithCreatedStatus() throws Exception {
         when(deliveryService.createDeliveryForOrder(1L))
-                .thenReturn(new Delivery(1L, "Rahul Driver", "9999999999", DeliveryStatus.ASSIGNING));
+                .thenReturn(new Delivery(1L, "Rahul Driver", "9999999999", DeliveryStatus.AVAILABLE));
 
         mockMvc.perform(post("/api/deliveries/orders/1"))
                 .andExpect(status().isCreated())

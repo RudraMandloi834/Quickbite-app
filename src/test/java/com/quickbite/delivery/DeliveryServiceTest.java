@@ -32,12 +32,15 @@ class DeliveryServiceTest {
     @Mock
     private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
+    @org.mockito.Mock
+    private DeliveryStatusHistoryRepository historyRepository;
+
     private DeliveryService deliveryService;
 
     @BeforeEach
     void setUp() {
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(new com.quickbite.security.CustomUserDetails("test@test.com", "pass", java.util.Collections.emptyList(), 1L), null, java.util.Collections.emptyList()));
-        deliveryService = new DeliveryService(deliveryRepository, orderRepository, org.mockito.Mockito.mock(com.quickbite.restaurant.RestaurantService.class), messagingTemplate);
+        deliveryService = new DeliveryService(deliveryRepository, orderRepository, org.mockito.Mockito.mock(com.quickbite.restaurant.RestaurantService.class), messagingTemplate, historyRepository);
     }
 
     @Test
@@ -52,7 +55,7 @@ class DeliveryServiceTest {
         assertEquals(1L, delivery.getOrderId());
         assertEquals(null, delivery.getDriverName());
         assertEquals(null, delivery.getDriverPhone());
-        assertEquals(DeliveryStatus.ASSIGNING, delivery.getStatus());
+        assertEquals(DeliveryStatus.AVAILABLE, delivery.getStatus());
     }
 
     @Test
@@ -104,7 +107,7 @@ class DeliveryServiceTest {
 
     @Test
     void advancesFromAssigningToAssigned() {
-        Delivery delivery = updateExistingDelivery(DeliveryStatus.ASSIGNING);
+        Delivery delivery = updateExistingDelivery(DeliveryStatus.AVAILABLE);
         when(deliveryRepository.save(delivery)).thenReturn(delivery);
 
         Delivery updated = deliveryService.updateStatus(1L, DeliveryStatus.ASSIGNED, 1L);
@@ -146,7 +149,7 @@ class DeliveryServiceTest {
 
     @Test
     void rejectsInvalidTransition() {
-        updateExistingDelivery(DeliveryStatus.ASSIGNING);
+        updateExistingDelivery(DeliveryStatus.AVAILABLE);
 
         assertStatus(HttpStatus.CONFLICT, () -> deliveryService.updateStatus(1L, DeliveryStatus.DELIVERED, 1L));
         org.mockito.Mockito.verifyNoInteractions(messagingTemplate);
@@ -176,7 +179,7 @@ class DeliveryServiceTest {
     }
 
     private Delivery assignedDelivery() {
-        return new Delivery(1L, "Rahul Driver", "9999999999", DeliveryStatus.ASSIGNING);
+        return new Delivery(1L, "Rahul Driver", "9999999999", DeliveryStatus.AVAILABLE);
     }
 
     private Delivery updateExistingDelivery(DeliveryStatus status) {

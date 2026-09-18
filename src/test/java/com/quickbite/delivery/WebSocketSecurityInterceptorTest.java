@@ -67,7 +67,7 @@ class WebSocketSecurityInterceptorTest {
 
         Message<?> message = org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
-        Delivery delivery = new Delivery(500L, null, null, DeliveryStatus.ASSIGNING);
+        Delivery delivery = new Delivery(500L, null, null, DeliveryStatus.AVAILABLE);
         Order order = new Order(1L, 500L, BigDecimal.TEN);
 
         when(deliveryRepository.findById(100L)).thenReturn(Optional.of(delivery));
@@ -88,7 +88,7 @@ class WebSocketSecurityInterceptorTest {
 
         Message<?> message = org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
-        Delivery delivery = new Delivery(500L, null, null, DeliveryStatus.ASSIGNING);
+        Delivery delivery = new Delivery(500L, null, null, DeliveryStatus.AVAILABLE);
         // Delivery belongs to customer 2
         Order order = new Order(2L, 500L, BigDecimal.TEN);
 

@@ -69,7 +69,7 @@ public class SecurityPatchTest {
         orderRepository.save(o1);
         orderId1 = o1.getId();
 
-        Delivery d1 = new Delivery(orderId1, null, null, DeliveryStatus.ASSIGNING);
+        Delivery d1 = new Delivery(orderId1, null, null, DeliveryStatus.AVAILABLE);
         deliveryRepository.save(d1);
         deliveryId1 = d1.getId();
     }

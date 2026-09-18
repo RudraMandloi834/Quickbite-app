@@ -16,6 +16,8 @@ public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @jakarta.persistence.Version
+    private Long version;
     private Long orderId;
     private BigDecimal amount;
 

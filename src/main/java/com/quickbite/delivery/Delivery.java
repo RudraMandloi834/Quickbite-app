@@ -16,6 +16,8 @@ public class Delivery {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @jakarta.persistence.Version
+    private Long version;
 
     @Column(unique = true)
     private Long orderId;

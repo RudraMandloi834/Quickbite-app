@@ -1,7 +1,7 @@
 package com.quickbite.delivery;
 
 public enum DeliveryStatus {
-    ASSIGNING,
+    AVAILABLE,
     ASSIGNED,
     PICKED_UP,
     OUT_FOR_DELIVERY,
