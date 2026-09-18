@@ -6,7 +6,7 @@ import { Container } from "@/components/Container";
 import { Card, CardContent } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
-import { getRestaurants, requestStaffAccess, ApiError } from "@/lib/api";
+import { getRestaurants, requestStaffAccess, joinWithCode, ApiError } from "@/lib/api";
 import { Restaurant } from "@/types/restaurant";
 
 export default function JoinRestaurantPage() {
@@ -17,6 +17,8 @@ export default function JoinRestaurantPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [isJoiningWithCode, setIsJoiningWithCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,6 +62,25 @@ export default function JoinRestaurantPage() {
     }).slice(0, 20); // Bounded display strategy
   }, [restaurants, searchQuery]);
 
+  
+  const handleJoinWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteCode.trim()) return;
+    setIsJoiningWithCode(true);
+    setError(null);
+    try {
+      await joinWithCode(inviteCode.trim());
+      router.push("/restaurant/onboarding-status");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError("You already have a pending or approved join request for this restaurant.");
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to join via code.");
+      }
+      setIsJoiningWithCode(false);
+    }
+  };
+
   const handleJoin = async (restaurantId: number) => {
     
     setSubmittingId(restaurantId);
@@ -93,6 +114,33 @@ export default function JoinRestaurantPage() {
         <p className="text-brand-muted text-lg">
           Search for an existing QuickBite partner restaurant to request staff access. Your request will require approval from the owner or operator.
         </p>
+      </div>
+
+      
+      <Card className="mb-8 p-4 sm:p-6 bg-brand-secondary/5 shadow-xs border-brand-secondary/20">
+        <h2 className="text-xl font-serif font-semibold text-brand-fg mb-2">Have an Invitation Code?</h2>
+        <p className="text-brand-muted text-sm mb-4">
+          Enter an invitation code to request co-owner or manager access to an existing restaurant.
+        </p>
+        <form onSubmit={handleJoinWithCode} className="flex gap-2">
+          <input
+            type="text"
+            className="flex-1 px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-secondary/50 font-mono"
+            placeholder="e.g. A1B2C3D4"
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+            maxLength={8}
+          />
+          <Button variant="primary" type="submit" disabled={isJoiningWithCode || !inviteCode.trim()}>
+            {isJoiningWithCode ? "Joining..." : "Join"}
+          </Button>
+        </form>
+      </Card>
+      
+      <div className="flex items-center gap-4 mb-8">
+        <div className="flex-1 h-px bg-brand-border"></div>
+        <div className="text-brand-muted text-sm font-medium uppercase tracking-wider">OR FIND A RESTAURANT</div>
+        <div className="flex-1 h-px bg-brand-border"></div>
       </div>
 
       <Card className="mb-8 p-4 sm:p-6 bg-white shadow-xs border-brand-border/60">

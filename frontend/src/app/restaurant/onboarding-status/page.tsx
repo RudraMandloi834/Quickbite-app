@@ -8,7 +8,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Badge } from "@/components/Badge";
 import { useAuth } from "@/context/AuthContext";
-import { getMyApplications, getMyStaffRequests } from "@/lib/api";
+import { getMyApplications, getMyStaffRequests, getMyJoinRequests, RestaurantJoinRequest } from "@/lib/api";
 import { Restaurant, RestaurantStaffProfile } from "@/types/restaurant";
 
 export default function OnboardingStatusPage() {
@@ -17,6 +17,7 @@ export default function OnboardingStatusPage() {
   
   const [applications, setApplications] = useState<Restaurant[]>([]);
   const [staffRequests, setStaffRequests] = useState<RestaurantStaffProfile[]>([]);
+  const [joinRequests, setJoinRequests] = useState<RestaurantJoinRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,13 +27,15 @@ export default function OnboardingStatusPage() {
     async function load() {
       try {
         
-        const [apps, requests] = await Promise.all([
+        const [apps, requests, joins] = await Promise.all([
           getMyApplications(),
-          getMyStaffRequests()
+          getMyStaffRequests(),
+          getMyJoinRequests()
         ]);
         if (!ignore) {
           setApplications(apps);
           setStaffRequests(requests);
+          setJoinRequests(joins);
           setIsLoading(false);
         }
       } catch (err) {
@@ -102,6 +105,35 @@ export default function OnboardingStatusPage() {
                     </div>
                     <Badge variant={app.status === 'APPROVED' ? 'success' : app.status === 'PENDING_APPROVAL' ? 'warning' : 'neutral'}>
                       {app.status || 'APPROVED'}
+                    </Badge>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        
+        {/* Owner Join Requests Section */}
+        <section>
+          <h2 className="text-2xl font-serif text-brand-fg mb-4">Existing Restaurant Join Requests</h2>
+          {joinRequests.length === 0 ? (
+            <Card className="p-8 text-center bg-brand-bg border-brand-border/60 border-dashed">
+              <p className="text-brand-muted mb-4">You have no pending join requests via invitation codes.</p>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {joinRequests.map((req) => (
+                <Card key={req.id} className="p-6 bg-white shadow-xs">
+                  <div className="flex justify-between items-start flex-wrap gap-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-brand-fg">Restaurant ID: {req.restaurantId}</h3>
+                      <p className="text-brand-muted text-sm mt-1">
+                        Requested on: {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'Unknown'}
+                      </p>
+                    </div>
+                    <Badge variant={req.status === 'APPROVED' ? 'success' : req.status === 'PENDING_APPROVAL' ? 'warning' : 'error'}>
+                      Join Status: {req.status}
                     </Badge>
                   </div>
                 </Card>

@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Restaurant, MenuItem } from "@/types/restaurant";
-import { getRestaurantDashboardSummary, getRestaurantOrders, updateRestaurantOrderStatus, updateMenuItem, deleteMenuItem, authFetch, getApiBaseUrl } from "@/lib/api";
+import { getRestaurantDashboardSummary, getRestaurantOrders, updateRestaurantOrderStatus, updateMenuItem, deleteMenuItem, createInvitation, authFetch, getApiBaseUrl, getJoinRequestsForRestaurant, approveJoinRequest, rejectJoinRequest, RestaurantJoinRequest } from "@/lib/api";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 type OrderEvent = { orderId: number; restaurantId: number; status: string; };
@@ -26,6 +26,7 @@ export default function RestaurantDashboard() {
   
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [joinRequests, setJoinRequests] = useState<RestaurantJoinRequest[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -146,11 +147,13 @@ export default function RestaurantDashboard() {
       const [sumData, ordData, menuRes] = await Promise.all([
         getRestaurantDashboardSummary(id),
         getRestaurantOrders(id),
-        authFetch(`${getApiBaseUrl()}/api/restaurants/${id}/menu`)
+        authFetch(`${getApiBaseUrl()}/api/restaurants/${id}/menu`),
+        getJoinRequestsForRestaurant(id).catch(() => [] as RestaurantJoinRequest[])
       ]);
       
       setSummary(sumData);
       setOrders(ordData);
+      setJoinRequests(arguments[0][3] || []);
       if (menuRes.ok) {
         setMenuItems(await menuRes.json());
       }
@@ -206,6 +209,47 @@ export default function RestaurantDashboard() {
           </select>
         )}
       </div>
+      <div className="bg-white p-4 shadow-sm border border-brand-border/60 rounded-lg mt-4 flex items-center justify-between">
+        <div>
+          <h3 className="font-medium text-brand-fg">Invite Co-Owners</h3>
+          <p className="text-sm text-brand-muted">Generate a code to allow another user to co-manage.</p>
+        </div>
+        <div className="flex gap-2 items-center">
+          {inviteCode && (
+            <span className="font-mono text-brand-secondary font-bold px-3 py-1 bg-brand-secondary/10 rounded border border-brand-secondary/20">
+              {inviteCode}
+            </span>
+          )}
+          <button 
+            onClick={handleGenerateInvite} 
+            disabled={isGenerating}
+            className="px-4 py-2 bg-brand-primary text-white rounded font-medium text-sm disabled:opacity-50"
+          >
+            {isGenerating ? "Generating..." : "Generate Code"}
+          </button>
+        </div>
+
+      {joinRequests.filter(r => r.status === 'PENDING_APPROVAL').length > 0 && (
+        <div className="bg-white p-4 shadow-sm border border-brand-border/60 rounded-lg mt-4">
+          <h3 className="font-medium text-brand-fg mb-3">Pending Join Requests</h3>
+          <div className="space-y-3">
+            {joinRequests.filter(r => r.status === 'PENDING_APPROVAL').map(req => (
+              <div key={req.id} className="flex items-center justify-between p-3 bg-brand-bg rounded border border-brand-border/40">
+                <div>
+                  <p className="text-sm font-medium text-brand-fg">User ID: {req.userId}</p>
+                  <p className="text-xs text-brand-muted">Requested on {new Date(req.createdAt).toLocaleDateString()}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleApproveJoin(req.id)} className="px-3 py-1 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700">Approve</button>
+                  <button onClick={() => handleRejectJoin(req.id)} className="px-3 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700">Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      </div>
+
       
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
