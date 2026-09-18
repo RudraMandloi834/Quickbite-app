@@ -25,6 +25,9 @@ public class OrderService {
     private final MenuItemRepository menuItemRepository;
     private final CustomerRepository customerRepository;
     private final OrderEventPublisher orderEventPublisher;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private OrderLifecycleService lifecycleService;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -67,17 +70,18 @@ public class OrderService {
                 cart.getRestaurantId(),
                 cart.getTotalAmount()
         ));
+        Order finalOrder = lifecycleService.transitionOrder(order.getId(), OrderStatus.PAYMENT_PENDING, cart.getCustomerId(), "ROLE_CUSTOMER", "Order initialized");
 
         List<OrderItem> orderItems = cartItems.stream()
-                .map(cartItem -> createOrderItem(order.getId(), cartItem))
+                .map(cartItem -> createOrderItem(finalOrder.getId(), cartItem))
                 .toList();
         orderItemRepository.saveAll(orderItems);
 
 
 
-        order.setItems(orderItems);
-        orderEventPublisher.publishOrderCreated(order);
-        return order;
+        finalOrder.setItems(orderItems);
+        orderEventPublisher.publishOrderCreated(finalOrder);
+        return finalOrder;
     }
 
     public Order getOrder(Long orderId) {
@@ -102,22 +106,7 @@ public class OrderService {
         return orders;
     }
 
-    @Transactional
-    public Order cancelOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        if (!order.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
-        }
-
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only pending orders can be cancelled");
-        }
-
-        order.cancel();
-        orderEventPublisher.publishOrderStatusUpdated(order);
-        return orderRepository.save(order);
-    }
+    
 
     private OrderItem createOrderItem(Long orderId, CartItem cartItem) {
         MenuItem menuItem = menuItemRepository.findById(cartItem.getMenuItemId())

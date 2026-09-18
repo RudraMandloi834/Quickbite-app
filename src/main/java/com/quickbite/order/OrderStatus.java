@@ -1,9 +1,18 @@
 package com.quickbite.order;
 
 public enum OrderStatus {
-    PENDING,
+    CREATED,
+    PAYMENT_PENDING,
+    PAID,
     CONFIRMED,
+    RESTAURANT_ACCEPTED,
     PREPARING,
-    READY,
-    CANCELLED
+    READY_FOR_PICKUP,
+    DRIVER_ASSIGNED,
+    PICKED_UP,
+    OUT_FOR_DELIVERY,
+    DELIVERED,
+    PAYMENT_FAILED,
+    CANCELLED,
+    REFUNDED
 }

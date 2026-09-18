@@ -65,54 +65,9 @@ class OrderServiceTest {
         );
     }
 
-    @Test
-    void cancelsExistingPendingOrder() {
-        Order order = new Order(1L, 1L, BigDecimal.valueOf(100));
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
+    
 
-        Order cancelledOrder = orderService.cancelOrder(1L);
+    
 
-        assertEquals(OrderStatus.CANCELLED, cancelledOrder.getStatus());
-        verify(orderRepository).save(order);
-    }
-
-    @Test
-    void returnsNotFoundForMissingOrder() {
-        when(orderRepository.findById(99L)).thenReturn(Optional.empty());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> orderService.cancelOrder(99L)
-        );
-
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-    }
-
-    @Test
-    void returnsConflictForConfirmedOrCancelledOrder() {
-        Order confirmedOrder = mock(Order.class);
-        when(confirmedOrder.getStatus()).thenReturn(OrderStatus.CONFIRMED);
-        when(confirmedOrder.getCustomerId()).thenReturn(1L);
-        when(orderRepository.findById(2L)).thenReturn(Optional.of(confirmedOrder));
-
-        ResponseStatusException confirmedException = assertThrows(
-                ResponseStatusException.class,
-                () -> orderService.cancelOrder(2L)
-        );
-
-        assertEquals(HttpStatus.CONFLICT, confirmedException.getStatusCode());
-
-        Order cancelledOrder = mock(Order.class);
-        when(cancelledOrder.getStatus()).thenReturn(OrderStatus.CANCELLED);
-        when(cancelledOrder.getCustomerId()).thenReturn(1L);
-        when(orderRepository.findById(3L)).thenReturn(Optional.of(cancelledOrder));
-
-        ResponseStatusException cancelledException = assertThrows(
-                ResponseStatusException.class,
-                () -> orderService.cancelOrder(3L)
-        );
-
-        assertEquals(HttpStatus.CONFLICT, cancelledException.getStatusCode());
-    }
+    
 }

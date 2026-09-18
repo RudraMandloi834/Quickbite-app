@@ -38,7 +38,7 @@ public class Order {
         this.customerId = customerId;
         this.restaurantId = restaurantId;
         this.totalAmount = totalAmount;
-        this.status = OrderStatus.PENDING;
+        this.status = OrderStatus.CREATED;
         this.createdAt = Instant.now();
     }
 

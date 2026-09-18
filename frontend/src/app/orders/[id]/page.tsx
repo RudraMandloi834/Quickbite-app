@@ -182,7 +182,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     switch (status.toUpperCase()) {
       case "CONFIRMED":
         return "success";
-      case "PENDING":
+      case "CREATED":
+      case "PAYMENT_PENDING":
         return "warning";
       case "CANCELLED":
         return "error";

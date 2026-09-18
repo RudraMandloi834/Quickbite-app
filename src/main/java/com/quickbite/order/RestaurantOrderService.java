@@ -16,6 +16,9 @@ public class RestaurantOrderService {
     private final OrderItemRepository orderItemRepository;
     private final RestaurantService restaurantService;
     private final OrderEventPublisher orderEventPublisher;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private OrderLifecycleService lifecycleService;
 
     public RestaurantOrderService(
             OrderRepository orderRepository,
@@ -68,12 +71,7 @@ public class RestaurantOrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
         }
         
-        if (request.status() == OrderStatus.CANCELLED && order.getStatus() != OrderStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only pending orders can be cancelled");
-        }
-        
-        order.setStatus(request.status());
-        orderEventPublisher.publishOrderStatusUpdated(order);
-        return orderRepository.save(order);
+        Long userId = SecurityUtils.getAuthenticatedCustomerId();
+        return lifecycleService.transitionOrder(orderId, request.status(), userId, "ROLE_RESTAURANT_PARTNER", "Updated by restaurant");
     }
 }

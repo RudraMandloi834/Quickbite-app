@@ -321,16 +321,16 @@ export default function RestaurantDashboard() {
                   </div>
                   <p className="text-sm text-gray-600 mb-2">Total: ${o.totalAmount.toFixed(2)}</p>
                   <div className="flex gap-2">
-                    {o.status === "PENDING" && (
-                      <button onClick={() => handleUpdateOrderStatus(o.id, "CONFIRMED")} className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">Confirm</button>
-                    )}
                     {o.status === "CONFIRMED" && (
+                      <button onClick={() => handleUpdateOrderStatus(o.id, "RESTAURANT_ACCEPTED")} className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">Accept</button>
+                    )}
+                    {o.status === "RESTAURANT_ACCEPTED" && (
                       <button onClick={() => handleUpdateOrderStatus(o.id, "PREPARING")} className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">Prepare</button>
                     )}
                     {o.status === "PREPARING" && (
-                      <button onClick={() => handleUpdateOrderStatus(o.id, "READY")} className="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600">Ready</button>
+                      <button onClick={() => handleUpdateOrderStatus(o.id, "READY_FOR_PICKUP")} className="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600">Ready</button>
                     )}
-                    {o.status === "PENDING" && (
+                    {(o.status === "CONFIRMED" || o.status === "RESTAURANT_ACCEPTED" || o.status === "PREPARING") && (
                       <button onClick={() => handleUpdateOrderStatus(o.id, "CANCELLED")} className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600">Cancel</button>
                     )}
                   </div>

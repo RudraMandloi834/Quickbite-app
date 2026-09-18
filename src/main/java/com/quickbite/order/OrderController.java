@@ -14,9 +14,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
     private final OrderService orderService;
+    private final OrderLifecycleService lifecycleService;
 
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, OrderLifecycleService lifecycleService) {
         this.orderService = orderService;
+        this.lifecycleService = lifecycleService;
     }
 
     @PostMapping("/from-cart/{cartId}")
@@ -32,6 +34,7 @@ public class OrderController {
 
     @DeleteMapping("/{orderId}")
     public Order cancelOrder(@PathVariable Long orderId) {
-        return orderService.cancelOrder(orderId);
+        Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        return lifecycleService.transitionOrder(orderId, OrderStatus.CANCELLED, userId, "ROLE_CUSTOMER", "User cancelled order");
     }
 }

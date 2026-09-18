@@ -19,6 +19,9 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.quickbite.order.OrderLifecycleService lifecycleService;
     private final RazorpayClientWrapper razorpayClient;
     private final com.quickbite.delivery.DeliveryService deliveryService;
     private final Environment environment;
@@ -42,7 +45,7 @@ public class PaymentService {
         if (order.getStatus() == OrderStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled orders cannot be paid");
         }
-        if (order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != OrderStatus.PAYMENT_PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only pending orders can be paid");
         }
         if (paymentRepository.existsByOrderIdAndStatus(orderId, PaymentStatus.SUCCESS)) {
@@ -138,11 +141,24 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
         
-        order.confirm();
-        orderRepository.save(order);
+        Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        lifecycleService.transitionOrder(order.getId(), OrderStatus.PAID, userId, "ROLE_CUSTOMER", "Payment verified");
+        lifecycleService.transitionOrder(order.getId(), OrderStatus.CONFIRMED, userId, "ROLE_SYSTEM", "Auto-confirmed post payment");
 
         deliveryService.createDeliveryForOrder(order.getId());
 
+        return payment;
+    }
+
+    
+    @Transactional
+    public Payment failPayment(Long paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        payment.setStatus(PaymentStatus.FAILED);
+        payment = paymentRepository.save(payment);
+        lifecycleService.transitionOrder(payment.getOrderId(), OrderStatus.PAYMENT_FAILED, userId, "ROLE_CUSTOMER", "Payment failed");
         return payment;
     }
 

@@ -39,7 +39,7 @@ public class AuthControllerTest {
 
     @Test
     void testSignupSuccess() throws Exception {
-        SignupRequest request = new SignupRequest("Test User", "testnew@example.com", "password123");
+        SignupRequest request = new SignupRequest("Test User", "testnew@example.com", "password123", "ROLE_CUSTOMER");
 
         mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -55,7 +55,7 @@ public class AuthControllerTest {
         Customer c = new Customer("Existing", "testdup@example.com", null, passwordEncoder.encode("password123"));
         customerRepository.save(c);
 
-        SignupRequest request = new SignupRequest("Test User", "testdup@example.com", "newpass");
+        SignupRequest request = new SignupRequest("Test User", "testdup@example.com", "newpass", "ROLE_CUSTOMER");
         mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))

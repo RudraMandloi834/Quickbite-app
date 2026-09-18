@@ -1,0 +1,2 @@
+#!/bin/bash
+sed -i 's/return customerService.getCustomer(customerId);/Long authId = SecurityUtils.getAuthenticatedCustomerId();\n        if (!customerId.equals(authId)) {\n            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access another user'\''s profile");\n        }\n        return customerService.getCustomer(customerId);/g' src/main/java/com/quickbite/customer/CustomerController.java

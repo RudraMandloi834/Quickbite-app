@@ -15,6 +15,9 @@ public class DeliveryService {
     private final DeliveryRepository deliveryRepository;
     private final OrderRepository orderRepository;
     private final RestaurantService restaurantService;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.quickbite.order.OrderLifecycleService orderLifecycleService;
 
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
@@ -82,13 +85,13 @@ public class DeliveryService {
 
         verifyDeliveryCreationAccess(order);
 
-        if (order.getStatus() == OrderStatus.PENDING) {
+        if (order.getStatus() == OrderStatus.CREATED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Pending orders cannot have a delivery");
         }
         if (order.getStatus() == OrderStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled orders cannot have a delivery");
         }
-        if (order.getStatus() != OrderStatus.CONFIRMED) {
+        if (order.getStatus() == OrderStatus.CREATED || order.getStatus() == OrderStatus.PAYMENT_PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only confirmed orders can have a delivery");
         }
         if (deliveryRepository.existsByOrderId(orderId)) {
@@ -101,6 +104,13 @@ public class DeliveryService {
                 null,
                 DeliveryStatus.ASSIGNING
         ));
+    }
+
+    
+    public boolean isDriverAssignedToOrder(Long orderId, Long driverId) {
+        return deliveryRepository.findByOrderId(orderId)
+                .map(d -> driverId.equals(d.getDriverId()))
+                .orElse(false);
     }
 
     public Delivery getDelivery(Long deliveryId) {
@@ -133,6 +143,7 @@ public class DeliveryService {
         delivery.setDriver(driverId, driverName, driverPhone);
         delivery.updateStatus(DeliveryStatus.ASSIGNED);
         Delivery saved = deliveryRepository.save(delivery);
+        orderLifecycleService.transitionOrder(saved.getOrderId(), com.quickbite.order.OrderStatus.DRIVER_ASSIGNED, driverId, "ROLE_DRIVER", "Driver assigned");
         publishDeliveryEvent(saved);
         return saved;
     }
@@ -156,6 +167,13 @@ public class DeliveryService {
 
         delivery.updateStatus(status);
         Delivery saved = deliveryRepository.save(delivery);
+        com.quickbite.order.OrderStatus newOrderStatus = null;
+        if (status == DeliveryStatus.PICKED_UP) newOrderStatus = com.quickbite.order.OrderStatus.PICKED_UP;
+        if (status == DeliveryStatus.OUT_FOR_DELIVERY) newOrderStatus = com.quickbite.order.OrderStatus.OUT_FOR_DELIVERY;
+        if (status == DeliveryStatus.DELIVERED) newOrderStatus = com.quickbite.order.OrderStatus.DELIVERED;
+        if (newOrderStatus != null) {
+            orderLifecycleService.transitionOrder(saved.getOrderId(), newOrderStatus, requestingDriverId, "ROLE_DRIVER", "Delivery update");
+        }
         publishDeliveryEvent(saved);
         return saved;
     }

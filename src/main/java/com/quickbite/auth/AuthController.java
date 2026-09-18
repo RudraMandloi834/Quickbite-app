@@ -53,11 +53,23 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
 
+        String role = request.role();
+        if (role == null || role.isBlank()) {
+            role = "ROLE_CUSTOMER";
+        } else if (!role.startsWith("ROLE_")) {
+            role = "ROLE_" + role.toUpperCase();
+        }
+        
+        if (!role.equals("ROLE_CUSTOMER") && !role.equals("ROLE_RESTAURANT_PARTNER") && !role.equals("ROLE_DRIVER")) {
+            role = "ROLE_CUSTOMER"; // Fallback to safe role
+        }
+
         Customer customer = new Customer(
                 request.name(),
                 request.email(),
                 null,
-                passwordEncoder.encode(request.password())
+                passwordEncoder.encode(request.password()),
+                role
         );
         customer = customerRepository.save(customer);
         

@@ -74,7 +74,7 @@ class PaymentServiceTest {
         assertEquals("order_razorpay_123", response.getRazorpayOrderId());
         assertEquals("rzp_test_key", response.getRazorpayKeyId());
         assertEquals(BigDecimal.valueOf(250), response.getAmount());
-        assertEquals(OrderStatus.PENDING, order.getStatus()); // Order should not be confirmed yet
+        assertEquals(OrderStatus.PAYMENT_PENDING, order.getStatus()); // Order should not be confirmed yet
         
         verify(paymentRepository).save(any(Payment.class));
         verify(orderRepository, never()).save(any(Order.class));
@@ -95,7 +95,7 @@ class PaymentServiceTest {
     @Test
     void rejectsPaymentForNonPendingOrder() {
         Order order = new Order(1L, 1L, BigDecimal.valueOf(250));
-        order.cancel();
+        order.setStatus(OrderStatus.CANCELLED);
         when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
 
         ResponseStatusException exception = assertThrows(

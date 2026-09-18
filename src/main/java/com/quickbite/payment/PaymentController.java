@@ -34,4 +34,9 @@ public class PaymentController {
     public Payment getPayment(@PathVariable Long paymentId) {
         return paymentService.getPayment(paymentId);
     }
+
+    @PostMapping("/{paymentId}/fail")
+    public Payment failPayment(@PathVariable Long paymentId) {
+        return paymentService.failPayment(paymentId);
+    }
 }
