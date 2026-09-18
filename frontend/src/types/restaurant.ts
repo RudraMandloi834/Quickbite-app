@@ -8,6 +8,8 @@ export interface Restaurant {
   distanceKm?: number;
   city?: string;
   status?: string;
+  createdAt?: string;
+  ownerId?: number;
 }
 
 export interface MenuItem {

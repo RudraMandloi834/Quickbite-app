@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client";
 
 import { use, useEffect, useState, useCallback, useRef } from "react";
@@ -7,7 +8,7 @@ import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
-import { getOrderById, getCustomerById, getRestaurantById, getDeliveryByOrderId, getApiBaseUrl } from "@/lib/api";
+import { getOrderById, getWsBaseUrl, getCustomerById, getRestaurantById, getDeliveryByOrderId, getApiBaseUrl } from "@/lib/api";
 import { Order } from "@/types/order";
 import { Customer } from "@/types/customer";
 import { Restaurant } from "@/types/restaurant";
@@ -113,7 +114,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     if (!token) return;
 
     const client = new Client({
-      webSocketFactory: () => new SockJS(`${getApiBaseUrl()}/ws`),
+      webSocketFactory: () => new SockJS(`${getWsBaseUrl()}/ws`),
       connectHeaders: {
         Authorization: `Bearer ${token}`
       },

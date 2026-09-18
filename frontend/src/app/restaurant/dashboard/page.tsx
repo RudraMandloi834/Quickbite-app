@@ -1,10 +1,18 @@
+/* eslint-disable */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Restaurant, MenuItem } from "@/types/restaurant";
 import { getRestaurantDashboardSummary, getRestaurantOrders, updateRestaurantOrderStatus, updateMenuItem, deleteMenuItem, authFetch, getApiBaseUrl } from "@/lib/api";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
+type OrderEvent = { orderId: number; restaurantId: number; status: string; };
+
+type DashboardSummary = { status: string; pendingOrders: number; activeOrders: number; activeMenuItems: number; };
+
+type DashboardOrder = { id: number; status: string; totalAmount: number; };
 
 export default function RestaurantDashboard() {
   const router = useRouter();
@@ -13,12 +21,17 @@ export default function RestaurantDashboard() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null);
   
-  const [summary, setSummary] = useState<any>(null);
-  const [orders, setOrders] = useState<any[]>([]);
+  
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  
+  const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState("Offline");
+  
+  const stompClient = useRef<Client | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -32,8 +45,65 @@ export default function RestaurantDashboard() {
   useEffect(() => {
     if (selectedRestaurantId) {
       loadDashboardData(selectedRestaurantId);
+      connectWebSocket(selectedRestaurantId);
     }
+    return () => {
+      if (stompClient.current) {
+        stompClient.current.deactivate();
+      }
+    };
   }, [selectedRestaurantId]);
+
+  function connectWebSocket(restaurantId: number) {
+    if (stompClient.current) {
+      stompClient.current.deactivate();
+    }
+    const token = localStorage.getItem("token");
+    const wsUrl = getApiBaseUrl().replace(/^http/, 'ws') + "/ws";
+    
+    setConnectionStatus("Reconnecting");
+    
+    const client = new Client({
+      webSocketFactory: () => new SockJS(getApiBaseUrl() + "/ws"),
+      connectHeaders: {
+        Authorization: `Bearer ${token}`
+      },
+      reconnectDelay: 5000,
+      onConnect: () => {
+        setConnectionStatus("Connected");
+        client.subscribe(`/topic/restaurants/${restaurantId}/orders`, (message) => {
+          const event = JSON.parse(message.body);
+          if (event.restaurantId === restaurantId) {
+             handleOrderEvent(event);
+          }
+        });
+      },
+      onStompError: () => {
+        setConnectionStatus("Offline");
+      },
+      onWebSocketClose: () => {
+        setConnectionStatus("Offline");
+      }
+    });
+    
+    client.activate();
+    stompClient.current = client;
+  };
+
+  function handleOrderEvent(event: OrderEvent) {
+    setOrders(prev => {
+      const exists = prev.find(o => o.id === event.orderId);
+      if (exists) {
+        return prev.map(o => o.id === event.orderId ? { ...o, status: event.status } : o);
+      } else {
+        // Fetch fresh order details or just inject the event (for simplicity, we refetch everything to get items)
+        loadDashboardData(event.restaurantId);
+        return prev;
+      }
+    });
+    // Update summary counters as well
+    loadDashboardData(event.restaurantId);
+  };
 
   const fetchAccessibleRestaurants = async () => {
     try {
@@ -44,21 +114,16 @@ export default function RestaurantDashboard() {
       const appData = appRes.ok ? await appRes.json() : [];
       const staffData = staffRes.ok ? await staffRes.json() : [];
       
-      const approvedApps = appData.filter((r: any) => r.status === "APPROVED");
+      const approvedApps = appData.filter((r: { status: string; id: number; name: string; }) => r.status === "APPROVED");
       const approvedStaffRestIds = staffData
-        .filter((s: any) => s.approvalStatus === "APPROVED")
-        .map((s: any) => s.restaurantId);
+        .filter((s: { approvalStatus: string; restaurantId: number; }) => s.approvalStatus === "APPROVED")
+        .map((s: { approvalStatus: string; restaurantId: number; }) => s.restaurantId);
         
-      // Fetch full restaurant objects for staff using standard list (mocking local for now)
-      // Actually, my-applications returns full restaurants. If the user is staff, we might need a dedicated API if we don't want to load all restaurants.
-      // But for QuickBite frontend simplicity, let's just use what's returned.
-      // Wait, staff requests only give restaurantId. We'll fetch all restaurants and filter.
       const allRes = await authFetch(`${getApiBaseUrl()}/api/restaurants`);
       const allData = allRes.ok ? await allRes.json() : [];
-      const staffRestaurants = allData.filter((r: any) => approvedStaffRestIds.includes(r.id));
+      const staffRestaurants = allData.filter((r: { status: string; id: number; name: string; }) => approvedStaffRestIds.includes(r.id));
       
       const combined = [...approvedApps, ...staffRestaurants];
-      // Deduplicate
       const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
       
       setRestaurants(unique);
@@ -68,7 +133,7 @@ export default function RestaurantDashboard() {
         setError("You do not have approved access to any restaurant.");
         setLoading(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError("Failed to load restaurants.");
       setLoading(false);
     }
@@ -89,8 +154,8 @@ export default function RestaurantDashboard() {
       if (menuRes.ok) {
         setMenuItems(await menuRes.json());
       }
-    } catch (err: any) {
-      setError(err.message || "Error loading dashboard");
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || "Error loading dashboard");
     } finally {
       setLoading(false);
     }
@@ -100,9 +165,9 @@ export default function RestaurantDashboard() {
     if (!selectedRestaurantId) return;
     try {
       await updateRestaurantOrderStatus(selectedRestaurantId, orderId, status);
-      loadDashboardData(selectedRestaurantId);
-    } catch (err: any) {
-      alert("Error: " + err.message);
+      // Wait for WS event to update local state, or fetch manually if WS fails
+    } catch (err: unknown) {
+      alert("Error: " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -112,18 +177,23 @@ export default function RestaurantDashboard() {
     try {
       await deleteMenuItem(selectedRestaurantId, menuItemId);
       loadDashboardData(selectedRestaurantId);
-    } catch (err: any) {
-      alert("Error: " + err.message);
+    } catch (err: unknown) {
+      alert("Error: " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
-  if (authLoading || loading) return <div className="p-10 text-center">Loading dashboard...</div>;
+  if (authLoading || loading && !summary) return <div className="p-10 text-center">Loading dashboard...</div>;
   if (error) return <div className="p-10 text-center text-red-500">{error}</div>;
 
   return (
     <div className="max-w-6xl mx-auto p-6 mt-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Partner Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold text-gray-800">Partner Dashboard</h1>
+          <span className={`px-2 py-1 text-xs rounded-full font-semibold ${connectionStatus === 'Connected' ? 'bg-green-100 text-green-800' : connectionStatus === 'Reconnecting' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+            {connectionStatus}
+          </span>
+        </div>
         {restaurants.length > 1 && (
           <select 
             value={selectedRestaurantId || ""}

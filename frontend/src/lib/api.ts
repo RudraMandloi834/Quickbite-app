@@ -7,11 +7,9 @@ import { Delivery } from "@/types/delivery";
 import { getAuthHeaders, getUser } from "@/lib/auth";
 
 export const getApiBaseUrl = (): string => {
-  if (typeof window !== "undefined") {
-    return "";
-  }
-  return process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 };
+
 
 // --- Public Endpoints ---
 
@@ -218,6 +216,7 @@ export async function updateDeliveryStatus(deliveryId: number, status: string): 
 
 // --- Restaurant Onboarding Endpoints ---
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function applyForRestaurant(data: any): Promise<Restaurant> {
   const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/apply`, {
     method: "POST",
@@ -262,7 +261,8 @@ export const getPendingRestaurants = async (): Promise<Restaurant[]> => {
   return res.json();
 };
 
-export const approveRestaurant = async (restaurantId: number): Promise<Restaurant> => {
+export interface ApprovalResponse { restaurant: Restaurant; username: string; temporaryPassword?: string; }
+export const approveRestaurant = async (restaurantId: number): Promise<ApprovalResponse> => {
   const res = await authFetch(`${getApiBaseUrl()}/api/operator/restaurants/${restaurantId}/approve`, {
     method: "POST"
   });
@@ -302,6 +302,7 @@ export const updateRestaurantOrderStatus = async (restaurantId: number, orderId:
   return res.json();
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const updateMenuItem = async (restaurantId: number, menuItemId: number, data: any) => {
   const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/menu/${menuItemId}`, {
     method: "PUT",
@@ -317,4 +318,15 @@ export const deleteMenuItem = async (restaurantId: number, menuItemId: number) =
     method: "DELETE"
   });
   if (!res.ok) throw new Error("Failed to delete menu item");
+};
+
+// --- Admin Endpoints ---
+export async function getAdminStats(): Promise<{ totalCustomers: number; totalRestaurants: number; totalOrders: number; totalDeliveries: number }> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/stats`);
+  if (!res.ok) throw new ApiError("Failed to load admin stats", res.status);
+  return res.json();
+}
+
+export const getWsBaseUrl = (): string => {
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 };

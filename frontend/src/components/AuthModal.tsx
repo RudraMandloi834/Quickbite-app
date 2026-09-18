@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -5,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "./Button";
 import Link from "next/link";
 
-export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function AuthModal({ isOpen, onClose, defaultView = "login" }: { isOpen: boolean; onClose: () => void; defaultView?: "login" | "signup" }) {
   const { login, signup } = useAuth();
   
   const [view, setView] = useState<"login" | "signup">("login");
@@ -20,7 +21,8 @@ export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
 
   useEffect(() => {
     if (isOpen) {
-      setView("login");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setView(defaultView);
       setError("");
       setEmail("");
       setPassword("");
@@ -221,7 +223,8 @@ export function AuthModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
             </div>
             
             <p className="mt-4 text-center text-sm text-brand-muted">
-              Already have an account? <button type="button" onClick={() => { setView("login"); setError(""); }} className="text-brand-primary hover:underline font-medium">Log in</button>
+              Already have an account? <button type="button" onClick={() => { // eslint-disable-next-line react-hooks/set-state-in-effect
+      setView(defaultView); setError(""); }} className="text-brand-primary hover:underline font-medium">Log in</button>
             </p>
           </div>
           

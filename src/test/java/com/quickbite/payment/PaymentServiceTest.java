@@ -42,6 +42,8 @@ class PaymentServiceTest {
 
     @Mock
     private com.quickbite.delivery.DeliveryService deliveryService;
+    @Mock
+    private org.springframework.core.env.Environment environment;
 
     private PaymentService paymentService;
 
@@ -49,7 +51,7 @@ class PaymentServiceTest {
     void setUp() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
             new CustomUserDetails("test@test.com", "pass", Collections.emptyList(), 1L), null));
-        paymentService = new PaymentService(paymentRepository, orderRepository, razorpayClient, deliveryService);
+        paymentService = new PaymentService(paymentRepository, orderRepository, razorpayClient, deliveryService, environment);
     }
 
     @Test

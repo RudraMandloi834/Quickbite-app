@@ -130,7 +130,7 @@ export default function OnboardingStatusPage() {
                       </p>
                     </div>
                     <Badge variant={req.approvalStatus === 'APPROVED' ? 'success' : req.approvalStatus === 'PENDING_APPROVAL' ? 'warning' : 'error'}>
-                      {req.approvalStatus}
+                      Staff Request: {req.approvalStatus}
                     </Badge>
                   </div>
                 </Card>

@@ -61,7 +61,7 @@ public class AuthController {
         );
         customer = customerRepository.save(customer);
         
-        String token = jwtService.generateToken(customer.getEmail(), customer.getId());
+        String token = jwtService.generateToken(customer.getEmail(), customer.getId(), customer.getRole());
         return new AuthResponse(token);
     }
 
@@ -78,7 +78,7 @@ public class AuthController {
         Customer customer = customerRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
 
-        String token = jwtService.generateToken(customer.getEmail(), customer.getId());
+        String token = jwtService.generateToken(customer.getEmail(), customer.getId(), customer.getRole());
         return new AuthResponse(token);
     }
 }

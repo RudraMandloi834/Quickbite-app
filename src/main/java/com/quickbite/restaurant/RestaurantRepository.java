@@ -11,6 +11,8 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
     List<Restaurant> findApprovedRestaurants();
 
     List<Restaurant> findByOwnerId(Long ownerId);
+    boolean existsByName(String name);
+    boolean existsByNameAndOwnerId(String name, Long ownerId);
     List<Restaurant> findByStatus(RestaurantStatus status);
 
     @Query(value = "SELECT id, name, cuisine, location, rating, address, city, area, latitude, longitude, opening_hours AS openingHours, delivery_radius AS deliveryRadius, cover_image_url AS coverImageUrl, " +

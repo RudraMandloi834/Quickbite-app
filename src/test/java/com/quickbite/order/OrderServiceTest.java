@@ -44,7 +44,8 @@ class OrderServiceTest {
     private MenuItemRepository menuItemRepository;
 
     @Mock
-    private CustomerRepository customerRepository;
+    private CustomerRepository customerRepository,
+                orderEventPublisher;
 
     private OrderService orderService;
 
@@ -52,13 +53,15 @@ class OrderServiceTest {
     void setUp() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
             new CustomUserDetails("test@test.com", "pass", Collections.emptyList(), 1L), null));
+        OrderEventPublisher orderEventPublisher = mock(OrderEventPublisher.class);
         orderService = new OrderService(
                 orderRepository,
                 orderItemRepository,
                 cartRepository,
                 cartItemRepository,
                 menuItemRepository,
-                customerRepository
+                customerRepository,
+                orderEventPublisher
         );
     }
 

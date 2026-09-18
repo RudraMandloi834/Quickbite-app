@@ -153,7 +153,7 @@ export async function fetchCartDisplay(cartId: number): Promise<CartDisplay | nu
     return {
       id: cart.id,
       restaurantId: cart.restaurantId,
-      restaurantName: "QuickBite Restaurant",
+      restaurantName: `Restaurant #${cart.restaurantId}`,
       totalAmount: 0,
       items: [],
     };

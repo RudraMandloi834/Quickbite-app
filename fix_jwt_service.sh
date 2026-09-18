@@ -1,0 +1,2 @@
+#!/bin/bash
+sed -i 's/public String generateToken(String username, Long customerId) {/public String generateToken(String username, Long customerId, String role) {\n        Map<String, Object> claims = new HashMap<>();\n        claims.put("customerId", customerId);\n        if (role != null) claims.put("roles", java.util.Collections.singletonList(role));\n        return generateToken(claims, username);\n    }\n\n    public String generateToken(String username, Long customerId) {/g' src/main/java/com/quickbite/security/JwtService.java

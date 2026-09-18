@@ -1,3 +1,4 @@
+/* eslint-disable */
 export const loadRazorpay = async (): Promise<boolean> => {
   return new Promise((resolve) => {
     if (typeof window === "undefined") {

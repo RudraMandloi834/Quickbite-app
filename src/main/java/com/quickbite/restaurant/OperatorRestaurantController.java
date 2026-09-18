@@ -29,7 +29,7 @@ public class OperatorRestaurantController {
     }
 
     @PostMapping("/{restaurantId}/approve")
-    public Restaurant approveRestaurant(@PathVariable Long restaurantId) {
+    public ApprovalResponse approveRestaurant(@PathVariable Long restaurantId) {
         Long operatorId = SecurityUtils.getAuthenticatedCustomerId();
         return restaurantService.approveRestaurant(restaurantId, operatorId);
     }

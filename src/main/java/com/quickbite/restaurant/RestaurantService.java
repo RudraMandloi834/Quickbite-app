@@ -1,18 +1,31 @@
 package com.quickbite.restaurant;
 
 import java.util.List;
-
+import java.security.SecureRandom;
+import java.util.Base64;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import com.quickbite.customer.Customer;
+import com.quickbite.customer.CustomerRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Service
 public class RestaurantService {
 
     private final RestaurantRepository restaurantRepository;
     private final RestaurantStaffProfileRepository staffProfileRepository;
+    private final CustomerRepository customerRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public RestaurantService(RestaurantRepository restaurantRepository, RestaurantStaffProfileRepository staffProfileRepository) {
+    public RestaurantService(RestaurantRepository restaurantRepository, 
+                             RestaurantStaffProfileRepository staffProfileRepository,
+                             CustomerRepository customerRepository,
+                             PasswordEncoder passwordEncoder) {
         this.restaurantRepository = restaurantRepository;
         this.staffProfileRepository = staffProfileRepository;
+        this.customerRepository = customerRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public List<Restaurant> getAllRestaurants() {
@@ -39,6 +52,9 @@ public class RestaurantService {
     }
 
     public Restaurant applyForRestaurant(CreateRestaurantRequest request, Long ownerId) {
+        if (restaurantRepository.existsByName(request.name())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Restaurant with this name already exists or is pending approval.");
+        }
         Restaurant restaurant = new Restaurant(
                 request.name(),
                 request.cuisine(),
@@ -97,7 +113,14 @@ public class RestaurantService {
         return restaurantRepository.findByStatus(RestaurantStatus.PENDING_APPROVAL);
     }
 
-    public Restaurant approveRestaurant(Long restaurantId, Long operatorId) {
+    private String generateRandomPassword() {
+        SecureRandom random = new SecureRandom();
+        byte[] bytes = new byte[12];
+        random.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    public ApprovalResponse approveRestaurant(Long restaurantId, Long operatorId) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Restaurant not found"));
         if (restaurant.getStatus() != RestaurantStatus.PENDING_APPROVAL) {
@@ -106,7 +129,26 @@ public class RestaurantService {
         restaurant.setStatus(RestaurantStatus.APPROVED);
         restaurant.setReviewedBy(operatorId);
         restaurant.setReviewedAt(java.time.Instant.now());
-        return restaurantRepository.save(restaurant);
+        restaurant = restaurantRepository.save(restaurant);
+
+        // Generate credentials
+        String rawPassword = generateRandomPassword();
+        String username = "partner_" + restaurant.getId() + "@quickbite.com";
+        
+        Customer generatedAccount = new Customer(
+            restaurant.getName() + " Manager",
+            username,
+            null,
+            passwordEncoder.encode(rawPassword),
+            "ROLE_CUSTOMER"
+        );
+        generatedAccount = customerRepository.save(generatedAccount);
+
+        RestaurantStaffProfile staff = new RestaurantStaffProfile(generatedAccount.getId(), restaurant.getId());
+        staff.setApprovalStatus(StaffRequestStatus.APPROVED);
+        staffProfileRepository.save(staff);
+
+        return new ApprovalResponse(restaurant, username, rawPassword);
     }
 
     public Restaurant rejectRestaurant(Long restaurantId, Long operatorId, String reason) {

@@ -31,6 +31,13 @@ public class JwtService {
         return claimsResolver.apply(claims);
     }
 
+    public String generateToken(String username, Long customerId, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("customerId", customerId);
+        if (role != null) claims.put("roles", java.util.Collections.singletonList(role));
+        return generateToken(claims, username);
+    }
+
     public String generateToken(String username, Long customerId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("customerId", customerId);

@@ -28,27 +28,29 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final UserDetailsService userDetailsService;
     private final com.quickbite.order.OrderRepository orderRepository;
     private final DeliveryRepository deliveryRepository;
+    private final com.quickbite.restaurant.RestaurantService restaurantService;
 
     public WebSocketConfig(JwtService jwtService, UserDetailsService userDetailsService,
                            com.quickbite.order.OrderRepository orderRepository,
-                           DeliveryRepository deliveryRepository) {
+                           DeliveryRepository deliveryRepository,
+                           com.quickbite.restaurant.RestaurantService restaurantService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
         this.orderRepository = orderRepository;
         this.deliveryRepository = deliveryRepository;
+        this.restaurantService = restaurantService;
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/user", "/topic");
+        config.enableSimpleBroker("/topic");
         config.setApplicationDestinationPrefixes("/app");
-        config.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOrigins("http://localhost:3000")
                 .withSockJS();
     }
 
@@ -99,6 +101,23 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             CustomUserDetails user = (CustomUserDetails) auth.getPrincipal();
                             if (user.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_DRIVER") || a.getAuthority().equals("ROLE_OPERATOR"))) {
                                 throw new IllegalArgumentException("Only drivers can subscribe to all deliveries");
+                            }
+                        } else if (destination.startsWith("/topic/restaurants/")) {
+                            try {
+                                String destRest = destination.substring("/topic/restaurants/".length());
+                                if (destRest.endsWith("/orders")) {
+                                    Long restaurantId = Long.parseLong(destRest.split("/")[0]);
+                                    Authentication auth = (Authentication) accessor.getUser();
+                                    if (auth == null || !(auth.getPrincipal() instanceof CustomUserDetails)) {
+                                        throw new IllegalArgumentException("Unauthenticated");
+                                    }
+                                    CustomUserDetails user = (CustomUserDetails) auth.getPrincipal();
+                                    if (!restaurantService.hasRestaurantAccess(restaurantId, user.getCustomerId())) {
+                                        throw new IllegalArgumentException("Unauthorized to subscribe to this restaurant");
+                                    }
+                                }
+                            } catch (Exception e) {
+                                throw new IllegalArgumentException("Invalid subscription destination: " + e.getMessage());
                             }
                         } else if (destination.startsWith("/topic/deliveries/")) {
                             try {

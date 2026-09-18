@@ -38,6 +38,7 @@ public class Restaurant {
     private RestaurantStatus status;
 
     private Long ownerId;
+    private java.time.Instant createdAt = java.time.Instant.now();
 
     private Long reviewedBy;
     private java.time.Instant reviewedAt;
@@ -96,6 +97,8 @@ public class Restaurant {
         this.status = status;
     }
 
+    public java.time.Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(java.time.Instant createdAt) { this.createdAt = createdAt; }
     public Long getOwnerId() {
         return ownerId;
     }

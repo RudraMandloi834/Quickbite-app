@@ -15,14 +15,17 @@ public class RestaurantOrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final RestaurantService restaurantService;
+    private final OrderEventPublisher orderEventPublisher;
 
     public RestaurantOrderService(
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
-            RestaurantService restaurantService) {
+            RestaurantService restaurantService,
+            OrderEventPublisher orderEventPublisher) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.restaurantService = restaurantService;
+        this.orderEventPublisher = orderEventPublisher;
     }
 
     public List<Order> getRestaurantOrders(Long restaurantId) {
@@ -70,6 +73,7 @@ public class RestaurantOrderService {
         }
         
         order.setStatus(request.status());
+        orderEventPublisher.publishOrderStatusUpdated(order);
         return orderRepository.save(order);
     }
 }

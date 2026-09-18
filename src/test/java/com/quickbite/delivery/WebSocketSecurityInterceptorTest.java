@@ -40,7 +40,8 @@ class WebSocketSecurityInterceptorTest {
         orderRepository = mock(OrderRepository.class);
         deliveryRepository = mock(DeliveryRepository.class);
 
-        WebSocketConfig config = new WebSocketConfig(jwtService, userDetailsService, orderRepository, deliveryRepository);
+        WebSocketConfig config = new WebSocketConfig(jwtService, userDetailsService, orderRepository, deliveryRepository,
+                org.mockito.Mockito.mock(com.quickbite.restaurant.RestaurantService.class));
         interceptor = config.stompSecurityInterceptor();
     }
 

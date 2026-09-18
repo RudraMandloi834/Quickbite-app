@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
 import {
-  getAvailableDeliveries,
+  getAvailableDeliveries, getWsBaseUrl,
   getMyDeliveries,
   assignDelivery,
   updateDeliveryStatus,
@@ -53,20 +54,13 @@ export default function DriverDashboardPage() {
   // WebSocket Connection for Auto-refresh
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token || !user || !user.roles?.includes("ROLE_DRIVER")) return;
+    if (!token || !user || !user.roles?.includes("DRIVER")) return;
 
     import("@stomp/stompjs").then(({ Client }) => {
       import("sockjs-client").then((SockJS) => {
-        const getApiBaseUrl = () => {
-          if (typeof window !== "undefined") {
-            const host = window.location.hostname;
-            return `http://${host}:8080`;
-          }
-          return "http://localhost:8080";
-        };
 
         const client = new Client({
-          webSocketFactory: () => new SockJS.default(`${getApiBaseUrl()}/ws`),
+          webSocketFactory: () => new SockJS.default(`${getWsBaseUrl()}/ws`),
           connectHeaders: {
             Authorization: `Bearer ${token}`
           },

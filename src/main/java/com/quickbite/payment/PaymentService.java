@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import org.springframework.core.env.Environment;
+import java.util.Arrays;
 
 @Service
 public class PaymentService {
@@ -19,12 +21,14 @@ public class PaymentService {
     private final OrderRepository orderRepository;
     private final RazorpayClientWrapper razorpayClient;
     private final com.quickbite.delivery.DeliveryService deliveryService;
+    private final Environment environment;
 
-    public PaymentService(PaymentRepository paymentRepository, OrderRepository orderRepository, RazorpayClientWrapper razorpayClient, com.quickbite.delivery.DeliveryService deliveryService) {
+    public PaymentService(PaymentRepository paymentRepository, OrderRepository orderRepository, RazorpayClientWrapper razorpayClient, com.quickbite.delivery.DeliveryService deliveryService, Environment environment) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.razorpayClient = razorpayClient;
         this.deliveryService = deliveryService;
+        this.environment = environment;
     }
 
     @Transactional
@@ -45,9 +49,27 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order has already been paid");
         }
 
+        String[] profiles = environment.getActiveProfiles();
+        boolean isDev = profiles != null && java.util.Arrays.asList(profiles).contains("dev");
+        if (isDev && (razorpayClient.getKeyId().equals("dummy") || razorpayClient.getKeyId().contains("dev"))) {
+            String devRazorpayOrderId = "dev_order_" + orderId + "_" + System.currentTimeMillis();
+            Payment payment = paymentRepository.save(new Payment(
+                    orderId,
+                    order.getTotalAmount(),
+                    devRazorpayOrderId,
+                    PaymentStatus.PENDING
+            ));
+            return new PaymentInitiationResponse(
+                    payment.getId(),
+                    order.getId(),
+                    devRazorpayOrderId,
+                    order.getTotalAmount(),
+                    "INR",
+                    razorpayClient.getKeyId()
+            );
+        }
         try {
             JSONObject orderRequest = new JSONObject();
-            // Amount in subunits (paise for INR)
             int amountInPaise = order.getTotalAmount().multiply(new BigDecimal(100)).intValue();
             orderRequest.put("amount", amountInPaise);
             orderRequest.put("currency", "INR");
@@ -90,14 +112,20 @@ public class PaymentService {
             return payment;
         }
 
-        boolean isValid = razorpayClient.verifySignature(
+        String[] profiles = environment.getActiveProfiles();
+        boolean isDev = profiles != null && Arrays.asList(profiles).contains("dev");
+        if (isDev && "dev_signature".equals(request.getRazorpaySignature())) {
+            // Dev bypass
+        } else {
+            boolean isValid = razorpayClient.verifySignature(
                 payment.getRazorpayOrderId(),
                 request.getRazorpayPaymentId(),
                 request.getRazorpaySignature()
-        );
+            );
 
-        if (!isValid) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment signature");
+            if (!isValid) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment signature");
+            }
         }
 
         payment.setRazorpayPaymentId(request.getRazorpayPaymentId());

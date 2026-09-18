@@ -39,7 +39,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             return customerRepository.save(newCustomer);
         });
 
-        String token = jwtService.generateToken(customer.getEmail(), customer.getId());
+        String token = jwtService.generateToken(customer.getEmail(), customer.getId(), customer.getRole());
         String targetUrl = UriComponentsBuilder.fromUriString("http://localhost:3000/auth/callback")
                 .queryParam("token", token)
                 .build().toUriString();

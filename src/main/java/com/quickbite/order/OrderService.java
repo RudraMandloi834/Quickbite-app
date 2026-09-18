@@ -24,6 +24,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final MenuItemRepository menuItemRepository;
     private final CustomerRepository customerRepository;
+    private final OrderEventPublisher orderEventPublisher;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -31,7 +32,8 @@ public class OrderService {
             CartRepository cartRepository,
             CartItemRepository cartItemRepository,
             MenuItemRepository menuItemRepository,
-            CustomerRepository customerRepository
+            CustomerRepository customerRepository,
+            OrderEventPublisher orderEventPublisher
     ) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
@@ -39,6 +41,7 @@ public class OrderService {
         this.cartItemRepository = cartItemRepository;
         this.menuItemRepository = menuItemRepository;
         this.customerRepository = customerRepository;
+        this.orderEventPublisher = orderEventPublisher;
     }
 
     @Transactional
@@ -73,6 +76,7 @@ public class OrderService {
 
 
         order.setItems(orderItems);
+        orderEventPublisher.publishOrderCreated(order);
         return order;
     }
 
@@ -83,6 +87,7 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
         order.setItems(orderItemRepository.findByOrderId(orderId));
+        orderEventPublisher.publishOrderCreated(order);
         return order;
     }
 
@@ -110,6 +115,7 @@ public class OrderService {
         }
 
         order.cancel();
+        orderEventPublisher.publishOrderStatusUpdated(order);
         return orderRepository.save(order);
     }
 
