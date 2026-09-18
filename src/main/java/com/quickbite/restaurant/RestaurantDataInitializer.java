@@ -14,6 +14,6 @@ public class RestaurantDataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        syntheticDataGenerator.generate();
+        // syntheticDataGenerator.generate();
     }
 }
