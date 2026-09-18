@@ -1,7 +1,7 @@
 /* eslint-disable */
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Container } from "@/components/Container";
 import { Card } from "@/components/Card";
@@ -11,7 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSSE } from "@/hooks/useSSE";
 
 import {
-  getAvailableDeliveries, getWsBaseUrl,
+  getAvailableDeliveries,
   getMyDeliveries,
   assignDelivery,
   updateDeliveryStatus,
@@ -19,46 +19,30 @@ import {
 import { Delivery } from "@/types/delivery";
 
 export default function DriverDashboardPage() {
+  const queryClient = useQueryClient();
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const { connectionStatus } = useSSE(token, (event: any) => {
-    fetchDeliveries();
-  });
-  const router = useRouter();
   const { user, loading, requireAuth } = useAuth();
   
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [myDeliveries, setMyDeliveries] = useState<Delivery[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  useSSE(token, (event: any) => {
+    queryClient.invalidateQueries({ queryKey: ["driverDeliveries"] });
+  });
 
-  const fetchDeliveries = useCallback(async () => {
-    if (loading) return;
-    if (!user) {
-      requireAuth(() => {});
-      return;
-    }
-    
-    try {
-      const [available, mine] = await Promise.all([
-        getAvailableDeliveries(),
-        getMyDeliveries()
-      ]);
+  const { data: availableDeliveries = [], isLoading: isAvailableLoading, isError: isAvailableError, error: availableError } = useQuery({
+    queryKey: ["driverDeliveries", "available"],
+    queryFn: getAvailableDeliveries,
+    enabled: !!user && user.roles?.includes("DRIVER")
+  });
 
-      setDeliveries(available);
-      setMyDeliveries(mine);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "An error occurred. You might not have the required permissions.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [loading, user, requireAuth]);
-
-  
+  const { data: myDeliveries = [], isLoading: isMyLoading, isError: isMyError, error: myError } = useQuery({
+    queryKey: ["driverDeliveries", "mine", user?.sub],
+    queryFn: getMyDeliveries,
+    enabled: !!user && user.roles?.includes("DRIVER")
+  });
 
   const handleAssign = async (deliveryId: number) => {
     try {
       await assignDelivery(deliveryId);
-      await fetchDeliveries();
+      queryClient.invalidateQueries({ queryKey: ["driverDeliveries"] });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Error assigning delivery");
     }
@@ -67,7 +51,7 @@ export default function DriverDashboardPage() {
   const handleUpdateStatus = async (deliveryId: number, status: string) => {
     try {
       await updateDeliveryStatus(deliveryId, status);
-      await fetchDeliveries();
+      queryClient.invalidateQueries({ queryKey: ["driverDeliveries"] });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Error updating status");
     }
@@ -82,7 +66,7 @@ export default function DriverDashboardPage() {
     }
   };
 
-  if (isLoading) {
+  if (loading || isAvailableLoading || isMyLoading) {
     return (
       <div className="flex-1 py-10">
         <Container>
@@ -95,19 +79,25 @@ export default function DriverDashboardPage() {
     );
   }
 
-  if (error) {
+  const isError = isAvailableError || isMyError;
+  const errorMsg = (availableError as Error)?.message || (myError as Error)?.message;
+
+  if (isError) {
     return (
       <div className="flex-1 py-20">
         <Container>
           <Card className="max-w-md mx-auto p-10 text-center bg-white shadow-xs border-rose-200">
-            <h2 className="text-2xl font-serif text-brand-fg mb-3">Access Denied</h2>
-            <p className="text-brand-muted text-sm mb-8">{error}</p>
+            <h2 className="text-2xl font-serif text-brand-fg mb-3">Error Loading Data</h2>
+            <p className="text-brand-muted text-sm mb-8">{errorMsg || "An error occurred fetching deliveries."}</p>
             <Button href="/" variant="primary" className="w-full">Return Home</Button>
           </Card>
         </Container>
       </div>
     );
   }
+
+  const activeDeliveries = myDeliveries.filter(d => d.status !== 'DELIVERED' && d.status !== 'CANCELLED');
+  const completedDeliveries = myDeliveries.filter(d => d.status === 'DELIVERED');
 
   return (
     <div className="flex-1 py-10 sm:py-16">
@@ -122,10 +112,10 @@ export default function DriverDashboardPage() {
           <div className="space-y-6">
             <h2 className="text-xl font-serif text-brand-fg border-b border-brand-border pb-2">My Active Deliveries</h2>
             
-            {myDeliveries.filter(d => d.status !== 'DELIVERED' && d.status !== 'CANCELLED').length === 0 ? (
+            {activeDeliveries.length === 0 ? (
               <p className="text-sm text-brand-muted">You have no active deliveries.</p>
             ) : (
-              myDeliveries.filter(d => d.status !== 'DELIVERED' && d.status !== 'CANCELLED').map(delivery => {
+              activeDeliveries.map(delivery => {
                 const nextStatus = getNextStatus(delivery.status);
                 return (
                   <Card key={delivery.id} className="p-6 bg-white shadow-xs">
@@ -152,10 +142,10 @@ export default function DriverDashboardPage() {
             )}
 
             <h2 className="text-xl font-serif text-brand-fg border-b border-brand-border pb-2 mt-8">My Completed Deliveries</h2>
-            {myDeliveries.filter(d => d.status === 'DELIVERED').length === 0 ? (
+            {completedDeliveries.length === 0 ? (
                <p className="text-sm text-brand-muted">No completed deliveries yet.</p>
             ) : (
-               myDeliveries.filter(d => d.status === 'DELIVERED').map(delivery => (
+               completedDeliveries.map(delivery => (
                  <Card key={delivery.id} className="p-4 bg-gray-50 border border-gray-100">
                     <p className="text-sm font-semibold text-gray-500">Order #{delivery.orderId}</p>
                     <p className="text-sm text-emerald-600 font-medium">Delivered successfully</p>
@@ -168,10 +158,10 @@ export default function DriverDashboardPage() {
           <div className="space-y-6">
             <h2 className="text-xl font-serif text-brand-fg border-b border-brand-border pb-2">Available for Assignment</h2>
             
-            {deliveries.length === 0 ? (
+            {availableDeliveries.length === 0 ? (
               <p className="text-sm text-brand-muted">No deliveries waiting for assignment.</p>
             ) : (
-              deliveries.map(delivery => (
+              availableDeliveries.map(delivery => (
                 <Card key={delivery.id} className="p-6 bg-white shadow-xs border-amber-200">
                   <div className="flex justify-between items-start mb-4">
                     <div>

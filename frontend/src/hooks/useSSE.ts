@@ -27,7 +27,7 @@ export function useSSE(token: string | null, onEvent: (event: SseEvent) => void)
       abortControllerRef.current = new AbortController();
       setConnectionStatus("Connecting");
 
-      fetchEventSource(getApiBaseUrl() + "/events/stream", {
+      fetchEventSource(getApiBaseUrl() + "/api/events/stream", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`

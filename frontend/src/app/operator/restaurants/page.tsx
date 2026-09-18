@@ -1,73 +1,45 @@
 /* eslint-disable */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Restaurant } from "@/types/restaurant";
 import { getPendingRestaurants, approveRestaurant, rejectRestaurant, ApprovalResponse } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export default function OperatorRestaurantsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const queryClient = useQueryClient();
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [approvedCredentials, setApprovedCredentials] = useState<ApprovalResponse | null>(null);
 
-  useEffect(() => {
-    if (authLoading) return; 
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-    
-    if (!(user?.roles?.includes("OPERATOR"))) {
-      router.push("/");
-      return;
-    }
+  const { data: restaurants = [], isLoading, isError, error } = useQuery({
+    queryKey: ['pendingRestaurants'],
+    queryFn: getPendingRestaurants,
+    enabled: !!user && !!user.roles?.includes("OPERATOR"),
+  });
 
-    fetchRestaurants();
-  }, [authLoading, user, router]);
+  if (authLoading || isLoading) return <div className="p-10 text-center text-gray-500">Loading pending restaurants...</div>;
+  
+  if (!user || !user.roles?.includes("OPERATOR")) {
+    return <div className="p-10 text-center text-red-500">Access Denied</div>;
+  }
 
-  const fetchRestaurants = async () => {
-    try {
-      // Need to capture raw response for debug
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/operator/restaurants/pending`, {
-        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to load pending restaurants");
-      }
-      setRestaurants(data);
-      if (data.length === 0) {
-        setDebugInfo({
-          endpoint: "/api/operator/restaurants/pending",
-          status: res.status,
-          body: data
-        });
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to load pending restaurants");
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (isError) return <div className="p-10 text-center text-red-500">{(error as Error)?.message || "Failed to load"}</div>;
 
   const handleApprove = async (id: number) => {
+    setActionLoading(id);
     try {
-      setActionLoading(id);
       const res = await approveRestaurant(id);
       setApprovedCredentials(res);
-      setRestaurants((prev) => prev.filter((r) => r.id !== id));
+      queryClient.invalidateQueries({ queryKey: ['pendingRestaurants'] });
     } catch (err: any) {
-      alert(err.message || "Failed to approve restaurant");
+      alert(err.message || "Approval failed");
     } finally {
       setActionLoading(null);
     }
@@ -75,151 +47,123 @@ export default function OperatorRestaurantsPage() {
 
   const handleReject = async (id: number) => {
     if (!rejectReason.trim()) {
-      alert("Please provide a rejection reason.");
+      alert("Please provide a rejection reason");
       return;
     }
+    setActionLoading(id);
     try {
-      setActionLoading(id);
       await rejectRestaurant(id, rejectReason);
       setRejectId(null);
       setRejectReason("");
-      setRestaurants((prev) => prev.filter((r) => r.id !== id));
+      queryClient.invalidateQueries({ queryKey: ['pendingRestaurants'] });
     } catch (err: any) {
-      alert(err.message || "Failed to reject restaurant");
+      alert(err.message || "Rejection failed");
     } finally {
       setActionLoading(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto mt-10 p-6 flex justify-center">
-        <p className="text-gray-500">Loading pending applications...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-4xl mx-auto mt-10 p-6">
-        <div className="bg-red-50 text-red-500 p-4 rounded-md">{error}</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-4xl mx-auto mt-10 p-6">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">Operator Dashboard</h1>
-      <h2 className="text-xl font-semibold mb-4 text-gray-700">Pending Restaurant Applications</h2>
-      
+    <div className="max-w-4xl mx-auto p-6 mt-6">
+      <h1 className="text-3xl font-bold mb-8 text-gray-800">Pending Restaurant Applications</h1>
+
       {approvedCredentials && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
-            <h3 className="text-2xl font-bold text-green-600 mb-2">Restaurant Approved!</h3>
-            <p className="text-gray-600 mb-6">
-              The restaurant <strong>{approvedCredentials.restaurant.name}</strong> has been successfully approved.
-            </p>
-            
-            <div className="bg-gray-50 p-4 rounded border border-gray-200 mb-6">
-              <p className="text-sm text-gray-500 mb-1">Login Username:</p>
-              <p className="font-mono font-bold text-gray-800 mb-3 select-all">{approvedCredentials.username}</p>
-              
-              <p className="text-sm text-gray-500 mb-1">Temporary Password:</p>
-              <p className="font-mono font-bold text-gray-800 select-all">{approvedCredentials.temporaryPassword}</p>
-            </div>
-            
-            <div className="bg-yellow-50 text-yellow-800 text-sm p-3 rounded mb-6">
-              <strong>Important:</strong> Save these credentials now. The password will not be shown again. Share them securely with the restaurant manager.
-            </div>
-            
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(`Username: ${approvedCredentials.username}\nPassword: ${approvedCredentials.temporaryPassword}`);
-                alert("Credentials copied to clipboard!");
-              }}
-              className="w-full bg-gray-100 text-gray-800 font-semibold py-2 rounded mb-2 hover:bg-gray-200 transition"
-            >
-              Copy Credentials
-            </button>
-            <button
-              onClick={() => setApprovedCredentials(null)}
-              className="w-full bg-brand-primary text-white font-semibold py-2 rounded hover:bg-orange-600 transition"
-            >
-              Close
-            </button>
+        <div className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-md mb-8">
+          <h2 className="text-lg font-bold mb-2">Restaurant Approved Successfully!</h2>
+          <p className="mb-4">Please share these initial owner credentials with the applicant securely.</p>
+          <div className="bg-white p-4 rounded border font-mono text-sm">
+            <p><strong>Login URL:</strong> {window.location.origin}/login</p>
+            <p><strong>Email:</strong> {approvedCredentials.username}</p>
+            <p><strong>Password:</strong> {approvedCredentials.temporaryPassword}</p>
           </div>
+          <button 
+            onClick={() => setApprovedCredentials(null)}
+            className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
-            {restaurants.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-          <p>No pending applications at the moment.</p>
-          {debugInfo && (
-            <div className="mt-8 text-left bg-gray-100 p-4 rounded text-xs font-mono">
-              <h4 className="font-bold mb-2">Debug Info (Development Only)</h4>
-              <p>Endpoint: {debugInfo.endpoint}</p>
-              <p>HTTP status: {debugInfo.status}</p>
-              <p>Response body: {JSON.stringify(debugInfo.body)}</p>
-              <p>Current logged-in user: {user?.sub}</p>
-              <p>Current roles: {user?.roles?.join(", ")}</p>
-            </div>
-          )}
+      {restaurants.length === 0 ? (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-10 text-center">
+          <p className="text-gray-500">No pending applications at the moment.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {restaurants.map((r) => (
-            <div key={r.id} className="bg-white rounded-lg shadow p-6 border border-gray-100">
-              <div className="flex justify-between items-start">
+        <div className="space-y-6">
+          {restaurants.map(r => (
+            <div key={r.id} className="bg-white border rounded-lg shadow-sm p-6">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">{r.name}</h3>
-                  <p className="text-gray-600">{r.cuisine}</p>
-                  <p className="text-gray-500 text-sm mt-1">{r.location || r.city}</p>
+                  <h2 className="text-xl font-bold text-gray-900">{r.name}</h2>
+                  <p className="text-sm text-gray-500">Applied on {new Date(r.createdAt || new Date().toISOString()).toLocaleDateString()}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleApprove(r.id)}
-                    disabled={actionLoading === r.id || rejectId === r.id}
-                    className="bg-green-600 text-white px-4 py-2 rounded-md font-medium hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {actionLoading === r.id && !rejectId ? "Approving..." : "Approve"}
-                  </button>
-                  <button
-                    onClick={() => setRejectId(rejectId === r.id ? null : r.id)}
-                    disabled={actionLoading === r.id}
-                    className="bg-red-600 text-white px-4 py-2 rounded-md font-medium hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Reject
-                  </button>
+                <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-semibold">
+                  PENDING REVIEW
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+                <div>
+                  <p className="text-gray-500 font-medium">Cuisine</p>
+                  <p>{r.cuisine || "Not specified"}</p>
                 </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Address</p>
+                  <p>{r.location || "Not specified"}</p>
+                </div>
+                {r.city && (
+                  <div>
+                    <p className="text-gray-500 font-medium">City</p>
+                    <p>{r.city}</p>
+                  </div>
+                )}
+                
               </div>
 
-              {rejectId === r.id && (
-                <div className="mt-4 bg-gray-50 p-4 rounded-md border border-gray-200">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Rejection Reason
-                  </label>
-                  <textarea
+              {rejectId === r.id ? (
+                <div className="bg-red-50 p-4 rounded-md border border-red-100 mt-4">
+                  <h3 className="font-medium text-red-800 mb-2">Provide Rejection Reason</h3>
+                  <textarea 
+                    className="w-full p-2 border rounded mb-3 text-sm"
+                    rows={3}
+                    placeholder="E.g., Incomplete address, invalid license..."
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    className="w-full border-gray-300 rounded-md shadow-sm p-2 mb-3 focus:ring-orange-500 focus:border-orange-500"
-                    rows={3}
-                    placeholder="Enter reason for rejection..."
                   />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setRejectId(null)}
-                      className="px-4 py-2 text-gray-600 hover:text-gray-900"
-                    >
-                      Cancel
-                    </button>
-                    <button
+                  <div className="flex gap-2">
+                    <button 
                       onClick={() => handleReject(r.id)}
-                      disabled={actionLoading === r.id || !rejectReason.trim()}
-                      className="bg-red-600 text-white px-4 py-2 rounded-md font-medium hover:bg-red-700 disabled:opacity-50"
+                      disabled={actionLoading === r.id}
+                      className="px-4 py-2 bg-red-600 text-white rounded text-sm font-medium hover:bg-red-700 disabled:opacity-50"
                     >
                       {actionLoading === r.id ? "Rejecting..." : "Confirm Rejection"}
                     </button>
+                    <button 
+                      onClick={() => { setRejectId(null); setRejectReason(""); }}
+                      disabled={actionLoading === r.id}
+                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
                   </div>
+                </div>
+              ) : (
+                <div className="flex gap-3 mt-4 border-t pt-4">
+                  <button 
+                    onClick={() => handleApprove(r.id)}
+                    disabled={actionLoading === r.id}
+                    className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex-1 sm:flex-none"
+                  >
+                    {actionLoading === r.id ? "Processing..." : "Approve"}
+                  </button>
+                  <button 
+                    onClick={() => setRejectId(r.id)}
+                    disabled={actionLoading === r.id}
+                    className="px-4 py-2 bg-red-100 text-red-700 rounded text-sm font-medium hover:bg-red-200 disabled:opacity-50 flex-1 sm:flex-none"
+                  >
+                    Reject
+                  </button>
                 </div>
               )}
             </div>

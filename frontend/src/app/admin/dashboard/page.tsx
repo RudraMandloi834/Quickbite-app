@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
@@ -10,20 +10,20 @@ import { getAdminStats } from "@/lib/api";
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const [stats, setStats] = useState<{ totalCustomers: number; totalRestaurants: number; totalOrders: number; totalDeliveries: number } | null>(null);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user || !user.roles?.includes("OPERATOR")) {
-      router.push("/");
-      return;
-    }
+  const { data: stats, isLoading: isStatsLoading, isError, error } = useQuery({
+    queryKey: ['adminStats'],
+    queryFn: getAdminStats,
+    enabled: !!user && !!user.roles?.includes("OPERATOR"),
+  });
 
-    getAdminStats().then(setStats).catch(console.error);
-  }, [loading, user, router]);
+  
 
-  if (loading) return <div className="p-10 text-center text-gray-500">Loading admin dashboard...</div>;
+  
+
+  if (loading || isStatsLoading) return <div className="p-10 text-center text-gray-500">Loading admin dashboard...</div>;
   if (!user || !user.roles?.includes("OPERATOR")) return null;
+  if (isError) return <div className="p-10 text-center text-red-500">{error?.message || "Failed to load stats"}</div>;
 
   return (
     <div className="flex-1 py-10 sm:py-16 bg-gray-50">
