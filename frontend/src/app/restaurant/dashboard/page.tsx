@@ -30,6 +30,8 @@ export default function RestaurantDashboard() {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("Offline");
   
   const stompClient = useRef<Client | null>(null);
@@ -163,6 +165,40 @@ export default function RestaurantDashboard() {
       setLoading(false);
     }
   };
+
+  
+  const handleGenerateInvite = async () => {
+    if (!selectedRestaurantId) return;
+    setIsGenerating(true);
+    setInviteCode(null);
+    try {
+      const res = await createInvitation(selectedRestaurantId);
+      setInviteCode(res.code);
+    } catch (err) {
+      alert("Failed to generate invitation code.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleApproveJoin = async (reqId: number) => {
+    try {
+      await approveJoinRequest(reqId);
+      setJoinRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'APPROVED' } : r));
+    } catch {
+      alert("Failed to approve");
+    }
+  };
+
+  const handleRejectJoin = async (reqId: number) => {
+    try {
+      await rejectJoinRequest(reqId);
+      setJoinRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'REJECTED' } : r));
+    } catch {
+      alert("Failed to reject");
+    }
+  };
+
 
   const handleUpdateOrderStatus = async (orderId: number, status: string) => {
     if (!selectedRestaurantId) return;
