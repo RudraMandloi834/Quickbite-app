@@ -44,30 +44,46 @@ public class OrderLifecycleService {
         validateTransition(previousStatus, newStatus);
         validateRoleAccess(order, newStatus, requestingUserId, role);
 
+        
         order.setStatus(newStatus);
+        java.time.Instant now = java.time.Instant.now();
+        if (newStatus == OrderStatus.ACCEPTED) order.setAcceptedAt(now);
+        if (newStatus == OrderStatus.PREPARING) order.setPreparingAt(now);
+        if (newStatus == OrderStatus.READY_FOR_PICKUP) order.setReadyAt(now);
+        if (newStatus == OrderStatus.DRIVER_ASSIGNED) order.setAssignedAt(now);
+        if (newStatus == OrderStatus.PICKED_UP) order.setPickedUpAt(now);
+        if (newStatus == OrderStatus.OUT_FOR_DELIVERY) order.setOutForDeliveryAt(now);
+        if (newStatus == OrderStatus.DELIVERED) order.setDeliveredAt(now);
+
         Order savedOrder = orderRepository.save(order);
+
 
         OrderStatusHistory history = new OrderStatusHistory(orderId, previousStatus, newStatus, requestingUserId, reason);
         historyRepository.save(history);
 
+        if (newStatus == OrderStatus.READY_FOR_PICKUP) { 
+            deliveryService.createDeliveryForOrder(savedOrder.getId()); 
+        }
         orderEventPublisher.publishOrderStatusUpdated(savedOrder);
         
         return savedOrder;
     }
 
+    
     private void validateTransition(OrderStatus current, OrderStatus next) {
+        if (current == null) {
+            if (next == OrderStatus.PLACED) return;
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Initial state must be PLACED");
+        }
         boolean valid = switch (current) {
-            case CREATED -> next == OrderStatus.PAYMENT_PENDING || next == OrderStatus.CANCELLED;
-            case PAYMENT_PENDING -> next == OrderStatus.PAID || next == OrderStatus.PAYMENT_FAILED || next == OrderStatus.CANCELLED;
-            case PAID -> next == OrderStatus.CONFIRMED || next == OrderStatus.REFUNDED;
-            case CONFIRMED -> next == OrderStatus.RESTAURANT_ACCEPTED || next == OrderStatus.CANCELLED || next == OrderStatus.REFUNDED;
-            case RESTAURANT_ACCEPTED -> next == OrderStatus.PREPARING || next == OrderStatus.CANCELLED;
-            case PREPARING -> next == OrderStatus.READY_FOR_PICKUP || next == OrderStatus.CANCELLED;
-            case READY_FOR_PICKUP -> next == OrderStatus.DRIVER_ASSIGNED || next == OrderStatus.CANCELLED;
-            case DRIVER_ASSIGNED -> next == OrderStatus.PICKED_UP || next == OrderStatus.CANCELLED;
+            case PLACED -> next == OrderStatus.ACCEPTED || next == OrderStatus.REJECTED || next == OrderStatus.CANCELLED;
+            case ACCEPTED -> next == OrderStatus.PREPARING;
+            case PREPARING -> next == OrderStatus.READY_FOR_PICKUP;
+            case READY_FOR_PICKUP -> next == OrderStatus.DRIVER_ASSIGNED;
+            case DRIVER_ASSIGNED -> next == OrderStatus.PICKED_UP;
             case PICKED_UP -> next == OrderStatus.OUT_FOR_DELIVERY;
             case OUT_FOR_DELIVERY -> next == OrderStatus.DELIVERED;
-            case DELIVERED, PAYMENT_FAILED, CANCELLED, REFUNDED -> false;
+            case DELIVERED, CANCELLED, REJECTED -> false;
         };
         if (!valid) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid transition from " + current + " to " + next);
@@ -80,7 +96,6 @@ public class OrderLifecycleService {
         boolean isRestaurant = "ROLE_RESTAURANT_PARTNER".equals(role);
         boolean isDriver = "ROLE_DRIVER".equals(role);
 
-        // System/Operator can do anything
         if (isOperator || userId == null) return;
 
         if (isRestaurant && !restaurantService.hasRestaurantAccess(order.getRestaurantId(), userId)) {
@@ -88,13 +103,8 @@ public class OrderLifecycleService {
         }
         
         if (isDriver) {
-            if (next == OrderStatus.DRIVER_ASSIGNED) {
-                // Anyone with driver role can assign themselves if it's currently unassigned.
-                // We assume this is fine since it's the assignment step itself.
-            } else {
-                if (!deliveryService.isDriverAssignedToOrder(order.getId(), userId)) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver access denied");
-                }
+            if (next != OrderStatus.DRIVER_ASSIGNED && !deliveryService.isDriverAssignedToOrder(order.getId(), userId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver access denied");
             }
         }
 
@@ -103,24 +113,19 @@ public class OrderLifecycleService {
                 if (isCustomer && !order.getCustomerId().equals(userId)) {
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer access denied");
                 }
+                if (isDriver || isRestaurant) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only customer can cancel");
                 break;
-            case PAYMENT_PENDING, PAID, PAYMENT_FAILED, CONFIRMED, REFUNDED:
-                if (isDriver || isRestaurant) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Role cannot update payment state");
-                }
-                break;
-            case RESTAURANT_ACCEPTED, PREPARING, READY_FOR_PICKUP:
+            case REJECTED, ACCEPTED, PREPARING, READY_FOR_PICKUP:
                 if (isDriver) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver cannot mark " + next);
                 if (isCustomer) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer cannot mark " + next);
                 break;
-            case DRIVER_ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY:
+            case DRIVER_ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED:
                 if (isRestaurant) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant cannot mark " + next);
                 if (isCustomer) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer cannot mark " + next);
                 break;
-            case DELIVERED:
-                if (isCustomer) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer cannot mark delivered");
-                if (isRestaurant) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant cannot mark delivered");
+            default:
                 break;
         }
     }
+
 }

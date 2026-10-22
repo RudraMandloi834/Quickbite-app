@@ -110,4 +110,34 @@ public class Delivery {
         if (status == DeliveryStatus.OUT_FOR_DELIVERY) this.outForDeliveryAt = this.updatedAt;
         if (status == DeliveryStatus.DELIVERED) this.deliveredAt = this.updatedAt;
     }
+
+    @jakarta.persistence.Transient
+    private String restaurantName;
+    @jakarta.persistence.Transient
+    private String restaurantAddress;
+    @jakarta.persistence.Transient
+    private String customerName;
+    @jakarta.persistence.Transient
+    private String customerPhone;
+    @jakarta.persistence.Transient
+    private String customerAddress;
+    @jakarta.persistence.Transient
+    private java.math.BigDecimal orderTotal;
+    @jakarta.persistence.Transient
+    private String orderItemsSummary;
+
+    public String getRestaurantName() { return restaurantName; }
+    public void setRestaurantName(String name) { this.restaurantName = name; }
+    public String getRestaurantAddress() { return restaurantAddress; }
+    public void setRestaurantAddress(String address) { this.restaurantAddress = address; }
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String name) { this.customerName = name; }
+    public String getCustomerPhone() { return customerPhone; }
+    public void setCustomerPhone(String phone) { this.customerPhone = phone; }
+    public String getCustomerAddress() { return customerAddress; }
+    public void setCustomerAddress(String address) { this.customerAddress = address; }
+    public java.math.BigDecimal getOrderTotal() { return orderTotal; }
+    public void setOrderTotal(java.math.BigDecimal total) { this.orderTotal = total; }
+    public String getOrderItemsSummary() { return orderItemsSummary; }
+    public void setOrderItemsSummary(String items) { this.orderItemsSummary = items; }
 }

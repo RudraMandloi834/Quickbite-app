@@ -1,16 +1,33 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-bg: #FAFAF9; /* warm off-white, stone-50 */
-  --color-brand-fg: #1C1917; /* stone-900 */
-  --color-brand-primary: #C2410C; /* orange-700 - warm terracotta */
-  --color-brand-primary-hover: #9A3412;
-  --color-brand-muted: #78716C; /* stone-500 */
-  --color-brand-border: #E7E5E4; /* stone-200 */
+  --color-brand-bg: #F8FAFC; /* slate-50 */
+  --color-brand-fg: #0F172A; /* slate-900 */
+  
+  /* Deep Teal / Emerald */
+  --color-brand-primary: #0F766E; /* teal-600 */
+  --color-brand-primary-hover: #115E59; /* teal-700 */
+  
+  /* Warm Secondary Accent */
+  --color-brand-secondary: #F59E0B; /* amber-500 */
+  --color-brand-secondary-hover: #D97706; /* amber-600 */
+
+  --color-brand-muted: #64748B; /* slate-500 */
+  --color-brand-border: #E2E8F0; /* slate-200 */
   --color-brand-card: #FFFFFF;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-playfair), ui-serif, Georgia, serif;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+
+  --shadow-soft: 0 4px 20px rgba(0,0,0,0.05);
+  --shadow-hover: 0 10px 30px rgba(0,0,0,0.08);
+  --shadow-card: 0 2px 10px rgba(0,0,0,0.03);
 }
 
 @layer base {
@@ -23,7 +40,7 @@
   }
   
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-serif);
-    font-weight: 500;
+    font-family: var(--font-sans);
+    font-weight: 700;
   }
 }

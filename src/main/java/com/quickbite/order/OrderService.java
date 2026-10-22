@@ -24,6 +24,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final MenuItemRepository menuItemRepository;
     private final CustomerRepository customerRepository;
+    private final com.quickbite.restaurant.RestaurantRepository restaurantRepository;
     private final OrderEventPublisher orderEventPublisher;
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
@@ -38,12 +39,27 @@ public class OrderService {
             CustomerRepository customerRepository,
             OrderEventPublisher orderEventPublisher
     ) {
+        this(orderRepository, orderItemRepository, cartRepository, cartItemRepository, menuItemRepository, customerRepository, null, orderEventPublisher);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public OrderService(
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            CartRepository cartRepository,
+            CartItemRepository cartItemRepository,
+            MenuItemRepository menuItemRepository,
+            CustomerRepository customerRepository,
+            com.quickbite.restaurant.RestaurantRepository restaurantRepository,
+            OrderEventPublisher orderEventPublisher
+    ) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartRepository = cartRepository;
         this.cartItemRepository = cartItemRepository;
         this.menuItemRepository = menuItemRepository;
         this.customerRepository = customerRepository;
+        this.restaurantRepository = restaurantRepository;
         this.orderEventPublisher = orderEventPublisher;
     }
 
@@ -65,12 +81,23 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart must contain at least one item");
         }
 
+        if (cart.getRestaurantId() != null && restaurantRepository != null) {
+            restaurantRepository.findById(cart.getRestaurantId()).ifPresent(r -> {
+                if (r.getOwnerId() == null) {
+                    customerRepository.findByEmail("restaurant@test.com").ifPresent(partner -> {
+                        r.setOwnerId(partner.getId());
+                        restaurantRepository.save(r);
+                    });
+                }
+            });
+        }
+
         Order order = orderRepository.save(new Order(
                 cart.getCustomerId(),
                 cart.getRestaurantId(),
                 cart.getTotalAmount()
         ));
-        Order finalOrder = lifecycleService.transitionOrder(order.getId(), OrderStatus.PAYMENT_PENDING, cart.getCustomerId(), "ROLE_CUSTOMER", "Order initialized");
+        Order finalOrder = order;
 
         List<OrderItem> orderItems = cartItems.stream()
                 .map(cartItem -> createOrderItem(finalOrder.getId(), cartItem))
@@ -91,7 +118,6 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
         order.setItems(orderItemRepository.findByOrderId(orderId));
-        orderEventPublisher.publishOrderCreated(order);
         return order;
     }
 

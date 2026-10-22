@@ -1,376 +1,258 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/Container";
-import { Card } from "@/components/Card";
-import { Badge } from "@/components/Badge";
+import { Card, CardContent } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { Cart, CartDisplay } from "@/types/cart";
+import { fetchCartDisplay, updateItemQuantity, removeItemFromCart, getStoredCartId } from "@/lib/cart";
 import { getCart } from "@/lib/api";
-import {
-  getStoredCartId,
-  fetchCartDisplay,
-  updateItemQuantity,
-  removeItemFromCart,
-} from "@/lib/cart";
+import { Cart } from "@/types/cart";
+import { CartDisplay } from "@/types/cart";
+import { useAuth } from "@/context/AuthContext";
+import { Minus, Plus, Trash2, ArrowLeft, Receipt, ChevronRight, CheckCircle2, MessageSquare, ShoppingBag } from "lucide-react";
 
 export default function CartPage() {
-  const [rawCart, setRawCart] = useState<Cart | null>(null);
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  
   const [cartDisplay, setCartDisplay] = useState<CartDisplay | null>(null);
+  const [rawCart, setRawCart] = useState<Cart | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadCart = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    const cartId = getStoredCartId();
-    if (!cartId) {
-      setRawCart(null);
-      setCartDisplay(null);
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const [cartData, displayData] = await Promise.all([
-        getCart(cartId).catch(() => null),
-        fetchCartDisplay(cartId),
-      ]);
-
-      if (cartData && displayData && displayData.items.length > 0) {
-        setRawCart(cartData);
-        setCartDisplay(displayData);
-      } else {
-        setRawCart(null);
-        setCartDisplay(null);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load your cart");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const [instructions, setInstructions] = useState("");
 
   useEffect(() => {
     let ignore = false;
-
-    async function initialLoad() {
-      const cartId = getStoredCartId();
-      if (!cartId) {
-        setIsLoading(false);
-        return;
-      }
-
+    async function loadCart() {
+      if (authLoading) return;
+      
       try {
-        const [cartData, displayData] = await Promise.all([
-          getCart(cartId).catch(() => null),
-          fetchCartDisplay(cartId),
-        ]);
-
+        const cid = getStoredCartId(); if (!cid) { setIsLoading(false); return; }; const display = await fetchCartDisplay(cid);
+        const raw = await getCart(cid);
         if (!ignore) {
-          if (cartData && displayData && displayData.items.length > 0) {
-            setRawCart(cartData);
-            setCartDisplay(displayData);
-          } else {
-            setRawCart(null);
-            setCartDisplay(null);
-          }
+          setCartDisplay(display);
+          setRawCart(raw);
           setIsLoading(false);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (!ignore) {
-          setError(err instanceof Error ? err.message : "Failed to load your cart");
+          setError((err as Error).message || "Failed to load cart");
           setIsLoading(false);
         }
       }
     }
+    loadCart();
+    return () => { ignore = true; };
+  }, [authLoading]);
 
-    initialLoad();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  const handleQuantityChange = async (menuItemId: number, newQty: number) => {
-    if (!rawCart) return;
+  const handleQuantityChange = async (menuItemId: number, newQuantity: number) => {
+    if (newQuantity < 1 || !cartDisplay) return;
     setIsUpdating(true);
     try {
-      const updated = await updateItemQuantity(rawCart, menuItemId, newQty);
-      if (!updated) {
-        setRawCart(null);
-        setCartDisplay(null);
-      } else {
-        setRawCart(updated);
-        const display = await fetchCartDisplay(updated.id);
-        setCartDisplay(display);
-      }
+      if (!rawCart) return;
+      await updateItemQuantity(rawCart, menuItemId, newQuantity);
+      const display = await fetchCartDisplay(rawCart.id);
+      setCartDisplay(display);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update item quantity");
+      alert("Failed to update quantity");
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleRemove = async (menuItemId: number) => {
-    if (!rawCart) return;
+    if (!cartDisplay) return;
     setIsUpdating(true);
     try {
-      const updated = await removeItemFromCart(rawCart, menuItemId);
-      if (!updated) {
-        setRawCart(null);
-        setCartDisplay(null);
-      } else {
-        setRawCart(updated);
-        const display = await fetchCartDisplay(updated.id);
-        setCartDisplay(display);
-      }
+      if (!rawCart) return;
+      await removeItemFromCart(rawCart, menuItemId);
+      const display = await fetchCartDisplay(rawCart.id);
+      setCartDisplay(display);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove item");
+      alert("Failed to remove item");
     } finally {
       setIsUpdating(false);
     }
   };
 
-  return (
-    <div className="flex-1 py-10 sm:py-16">
-      <Container>
-        {/* Page Header */}
-        <div className="mb-8 sm:mb-12">
-          <Badge variant="default" className="mb-2">
-            Your Selection
-          </Badge>
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <h1 className="text-4xl sm:text-5xl font-serif text-brand-fg tracking-tight">
-                Your Cart
-              </h1>
-              {cartDisplay && cartDisplay.items.length > 0 && (
-                <p className="text-brand-muted text-base mt-2">
-                  Ordering from{" "}
-                  <Link
-                    href={`/restaurants/${cartDisplay.restaurantId}`}
-                    className="font-medium text-brand-fg underline underline-offset-4 hover:text-brand-primary transition-colors"
-                  >
-                    {cartDisplay.restaurantName}
-                  </Link>
-                </p>
-              )}
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-stone-50 pt-24 pb-20">
+        <Container>
+          <div className="animate-pulse space-y-8">
+            <div className="h-10 w-48 bg-stone-200 rounded-lg" />
+            <div className="flex flex-col lg:flex-row gap-8">
+              <div className="flex-1 space-y-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-32 bg-stone-200 rounded-2xl" />
+                ))}
+              </div>
+              <div className="w-full lg:w-96 h-96 bg-stone-200 rounded-2xl" />
             </div>
-            {cartDisplay && cartDisplay.items.length > 0 && (
-              <span className="text-sm font-medium text-brand-muted">
-                {cartDisplay.items.reduce((acc, item) => acc + item.quantity, 0)} items selected
-              </span>
-            )}
           </div>
+        </Container>
+      </div>
+    );
+  }
+
+  const fees = {
+    delivery: cartDisplay?.items.length ? 49.00 : 0,
+    taxes: cartDisplay ? cartDisplay.totalAmount * 0.05 : 0,
+  };
+  const finalTotal = cartDisplay ? cartDisplay.totalAmount + fees.delivery + fees.taxes : 0;
+
+  return (
+    <div className="min-h-screen bg-stone-50 pt-24 pb-24">
+      <Container>
+        <div className="mb-8 flex items-center gap-4">
+          <button onClick={() => router.back()} className="w-10 h-10 bg-white border border-stone-200 rounded-full flex items-center justify-center text-stone-600 hover:text-stone-900 transition-colors shadow-sm">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-3xl font-extrabold text-stone-900">Your Cart</h1>
         </div>
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 animate-pulse">
-            <div className="lg:col-span-2 space-y-4">
-              {[1, 2, 3].map((idx) => (
-                <Card key={idx} className="p-6">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="space-y-2 flex-1">
-                      <div className="h-6 w-1/3 bg-brand-border/60 rounded" />
-                      <div className="h-4 w-1/2 bg-brand-border/40 rounded" />
-                    </div>
-                    <div className="h-6 w-16 bg-brand-border/60 rounded" />
-                  </div>
-                </Card>
-              ))}
+        {error ? (
+          <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-100 font-medium">
+            {error}
+          </div>
+        ) : !cartDisplay || cartDisplay.items.length === 0 ? (
+          <div className="bg-white rounded-2xl p-16 flex flex-col items-center justify-center text-center shadow-sm border border-stone-100 max-w-2xl mx-auto mt-12">
+            <div className="w-24 h-24 bg-stone-50 rounded-full flex items-center justify-center mb-6">
+              <ShoppingBag className="w-12 h-12 text-stone-300" />
             </div>
-            <div className="lg:col-span-1">
-              <Card className="p-6 space-y-4">
-                <div className="h-6 w-1/2 bg-brand-border/60 rounded" />
-                <div className="h-4 w-full bg-brand-border/40 rounded" />
-                <div className="h-12 w-full bg-brand-border/60 rounded-md" />
-              </Card>
-            </div>
+            <h2 className="text-2xl font-bold text-stone-900 mb-2">Cart is empty</h2>
+            <p className="text-stone-500 mb-8 max-w-sm">Looks like you haven&apos;t added anything to your cart yet. Let&apos;s find some delicious food!</p>
+            <Button href="/restaurants" variant="primary" className="font-bold px-8">
+              Explore Restaurants
+            </Button>
           </div>
-        )}
-
-        {/* Error State */}
-        {!isLoading && error && (
-          <div className="max-w-xl mx-auto my-12 text-center">
-            <Card className="p-8 border-rose-200 bg-white shadow-sm">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-rose-50 flex items-center justify-center text-rose-600">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-serif text-brand-fg mb-2">Cart Error</h2>
-              <p className="text-brand-muted text-sm mb-6">{error}</p>
-              <div className="flex gap-4 justify-center">
-                <Button href="/restaurants" variant="outline">
-                  Browse Restaurants
-                </Button>
-                <Button onClick={loadCart} variant="primary">
-                  Try Again
-                </Button>
-              </div>
-            </Card>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && !error && (!cartDisplay || cartDisplay.items.length === 0) && (
-          <div className="max-w-md mx-auto my-16 text-center">
-            <Card className="p-10 bg-white shadow-xs border-brand-border/80">
-              <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-brand-bg flex items-center justify-center text-brand-muted">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-serif text-brand-fg mb-3">
-                Your cart is empty
-              </h2>
-              <p className="text-brand-muted text-sm leading-relaxed mb-8">
-                Explore our curated restaurants to find honest, memorable dishes prepared without the noise.
-              </p>
-              <Button href="/restaurants" size="lg" variant="primary" className="w-full">
-                Find Restaurants
-              </Button>
-            </Card>
-          </div>
-        )}
-
-        {/* Populated Cart State */}
-        {!isLoading && !error && cartDisplay && cartDisplay.items.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            {/* Left Column: Cart Items List */}
-            <div className="lg:col-span-2 space-y-4">
-              {cartDisplay.items.map((item) => (
-                <Card
-                  key={item.menuItemId}
-                  className="p-6 bg-white shadow-xs hover:border-brand-primary/30 transition-colors"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center justify-between sm:justify-start gap-3">
-                        <h3 className="font-serif text-xl font-medium text-brand-fg">
-                          {item.name}
-                        </h3>
-                      </div>
-                      {item.description && (
-                        <p className="text-brand-muted text-sm line-clamp-1">
-                          {item.description}
-                        </p>
-                      )}
-                      <p className="text-xs text-brand-muted font-medium pt-1">
-                        ₹{item.unitPrice.toFixed(2)} each
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between sm:justify-end gap-6 pt-3 sm:pt-0 border-t sm:border-t-0 border-brand-border/60">
-                      {/* Quantity Controls */}
-                      <div className="flex items-center rounded-lg border border-brand-border bg-brand-bg/50 p-1">
-                        <button
-                          type="button"
-                          disabled={isUpdating}
-                          onClick={() => handleQuantityChange(item.menuItemId, item.quantity - 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded text-brand-fg hover:bg-white transition-colors disabled:opacity-40"
-                          aria-label="Decrease quantity"
-                        >
-                          –
-                        </button>
-                        <span className="w-8 text-center text-sm font-semibold text-brand-fg">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={isUpdating}
-                          onClick={() => handleQuantityChange(item.menuItemId, item.quantity + 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded text-brand-fg hover:bg-white transition-colors disabled:opacity-40"
-                          aria-label="Increase quantity"
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      {/* Line Total */}
-                      <span className="font-serif text-lg font-semibold text-brand-fg min-w-[70px] text-right">
-                        ₹{item.subtotal.toFixed(2)}
-                      </span>
-
-                      {/* Remove Action */}
-                      <button
-                        type="button"
-                        disabled={isUpdating}
-                        onClick={() => handleRemove(item.menuItemId)}
-                        className="text-xs font-medium text-brand-muted hover:text-rose-600 transition-colors disabled:opacity-40"
-                        title="Remove item"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-
-              <div className="pt-2 flex justify-between items-center text-sm">
-                <Link
-                  href={`/restaurants/${cartDisplay.restaurantId}`}
-                  className="text-brand-muted hover:text-brand-fg transition-colors inline-flex items-center gap-1 font-medium"
-                >
-                  ← Add more items from {cartDisplay.restaurantName}
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
+            
+            {/* Left Column - Items */}
+            <div className="flex-1 w-full space-y-4">
+              <div className="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm flex justify-between items-center">
+                <div>
+                  <p className="text-sm font-bold text-stone-500 uppercase tracking-wide">Ordering From</p>
+                  <Link href={`/restaurants/${cartDisplay.restaurantId}`} className="text-lg font-extrabold text-stone-900 hover:text-brand-primary transition-colors">
+                    {cartDisplay.restaurantName}
+                  </Link>
+                </div>
+                <Link href={`/restaurants/${cartDisplay.restaurantId}`} className="text-sm font-bold text-brand-primary bg-brand-primary/10 px-4 py-2 rounded-lg hover:bg-brand-primary/20 transition-colors">
+                  Add items
                 </Link>
               </div>
+
+              <div className="space-y-4">
+                {cartDisplay.items.map((item) => (
+                  <div key={item.menuItemId} className="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm flex flex-col sm:flex-row justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-bold text-stone-900 text-lg mb-1">{item.name}</h3>
+                          {item.description && <p className="text-sm text-stone-500 line-clamp-1 mb-2">{item.description}</p>}
+                          <p className="font-extrabold text-stone-900">₹{item.unitPrice.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between sm:flex-col sm:items-end sm:justify-between gap-4 border-t sm:border-none pt-4 sm:pt-0 border-stone-100">
+                      <span className="font-extrabold text-lg text-brand-primary sm:hidden">₹{item.subtotal.toFixed(2)}</span>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center bg-stone-50 border border-stone-200 rounded-lg p-1">
+                          <button
+                            disabled={isUpdating}
+                            onClick={() => handleQuantityChange(item.menuItemId, item.quantity - 1)}
+                            className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-brand-primary disabled:opacity-50 transition-colors"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="w-8 text-center font-bold text-stone-900">{item.quantity}</span>
+                          <button
+                            disabled={isUpdating}
+                            onClick={() => handleQuantityChange(item.menuItemId, item.quantity + 1)}
+                            className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-brand-primary disabled:opacity-50 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <button
+                          disabled={isUpdating}
+                          onClick={() => handleRemove(item.menuItemId)}
+                          className="w-10 h-10 flex items-center justify-center text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Cooking Instructions */}
+              <div className="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
+                <div className="flex gap-3 items-start">
+                  <MessageSquare className="w-5 h-5 text-stone-400 mt-0.5 shrink-0" />
+                  <div className="w-full">
+                    <h4 className="font-bold text-stone-900 mb-2">Add cooking instructions</h4>
+                    <textarea 
+                      className="w-full bg-stone-50 border border-stone-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all resize-none"
+                      placeholder="E.g. Make it spicy, no onions..."
+                      rows={2}
+                      value={instructions}
+                      onChange={(e) => setInstructions(e.target.value)}
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Right Column: Order Summary */}
-            <div className="lg:col-span-1">
-              <Card className="p-6 sm:p-8 bg-white shadow-xs sticky top-24">
-                <h2 className="font-serif text-2xl font-medium text-brand-fg mb-6 pb-4 border-b border-brand-border">
-                  Order Summary
-                </h2>
-
-                <div className="space-y-3.5 text-sm">
-                  <div className="flex justify-between text-brand-muted">
-                    <span>Items subtotal</span>
-                    <span className="font-medium text-brand-fg">
-                      ₹{cartDisplay.totalAmount.toFixed(2)}
-                    </span>
+            {/* Right Column - Bill Summary */}
+            <div className="w-full lg:w-96 shrink-0">
+              <div className="bg-white rounded-2xl border border-stone-100 shadow-sm sticky top-24 overflow-hidden">
+                <div className="bg-stone-50 p-5 border-b border-stone-100 flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-stone-700" />
+                  <h3 className="font-bold text-stone-900 text-lg">Bill Details</h3>
+                </div>
+                
+                <div className="p-5 space-y-4">
+                  <div className="flex justify-between text-sm font-medium text-stone-600">
+                    <span>Item Total</span>
+                    <span>₹{cartDisplay.totalAmount.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-brand-muted">
-                    <span>Delivery fee</span>
-                    <span className="font-medium text-emerald-600">Free</span>
+                  <div className="flex justify-between text-sm font-medium text-stone-600">
+                    <span>Delivery Fee</span>
+                    <span>₹{fees.delivery.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-brand-muted">
-                    <span>Taxes & charges</span>
-                    <span className="font-medium text-brand-fg">Included</span>
+                  <div className="flex justify-between text-sm font-medium text-stone-600">
+                    <span>Taxes (5%)</span>
+                    <span>₹{fees.taxes.toFixed(2)}</span>
                   </div>
-
-                  <div className="pt-4 mt-4 border-t border-brand-border flex justify-between items-baseline">
-                    <span className="font-serif text-lg font-medium text-brand-fg">
-                      Total
-                    </span>
-                    <span className="font-serif text-3xl font-semibold text-brand-primary">
-                      ₹{cartDisplay.totalAmount.toFixed(2)}
-                    </span>
+                  
+                  <div className="pt-4 border-t border-stone-100 border-dashed flex justify-between items-end">
+                    <div>
+                      <span className="block text-sm font-bold text-stone-500 uppercase">To Pay</span>
+                    </div>
+                    <span className="text-2xl font-extrabold text-stone-900">₹{finalTotal.toFixed(2)}</span>
                   </div>
                 </div>
 
-                <div className="mt-8 space-y-3">
+                <div className="p-5 bg-stone-50 border-t border-stone-100">
                   <Button
                     href="/checkout"
-                    size="lg"
                     variant="primary"
-                    className="w-full text-base font-medium h-13"
+                    className="w-full h-14 text-lg font-bold shadow-md shadow-brand-primary/20 flex items-center justify-center gap-2"
                   >
-                    Proceed to checkout
+                    Proceed to Checkout <ChevronRight className="w-5 h-5" />
                   </Button>
-                  <p className="text-center text-xs text-brand-muted">
-                    Checkout and order placement will be available on the next step.
-                  </p>
                 </div>
-              </Card>
+              </div>
             </div>
+            
           </div>
         )}
       </Container>

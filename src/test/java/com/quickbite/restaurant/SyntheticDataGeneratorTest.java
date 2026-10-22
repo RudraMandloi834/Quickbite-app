@@ -58,7 +58,7 @@ public class SyntheticDataGeneratorTest {
         
         assertEquals(10000, totalRestaurants, "Should generate exactly 10,000 restaurants");
         
-        String[] expectedCities = {"Bengaluru", "Mumbai", "Delhi", "Hyderabad", "Chennai", "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Chandigarh", "Indore"};
+        String[] expectedCities = {"Delhi", "Mumbai", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow", "Indore", "Bhopal", "Chandigarh", "Surat", "Nagpur", "Patna", "Kochi", "Coimbatore", "Vadodara", "Visakhapatnam", "Nashik", "Mysuru", "Goa", "Bhubaneswar", "Guwahati", "Dehradun", "Amritsar", "Rajkot"};
         for (String city : expectedCities) {
             assertTrue(cityCounts.containsKey(city), "Missing city: " + city);
             assertTrue(cityCounts.get(city) > 0, "No restaurants for city: " + city);

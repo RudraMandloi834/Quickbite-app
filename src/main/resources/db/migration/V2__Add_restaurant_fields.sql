@@ -1,0 +1,4 @@
+ALTER TABLE restaurant ADD COLUMN review_count INTEGER DEFAULT 0;
+ALTER TABLE restaurant ADD COLUMN price_range INTEGER DEFAULT 1;
+ALTER TABLE restaurant ADD COLUMN delivery_availability BOOLEAN DEFAULT TRUE;
+ALTER TABLE restaurant ADD COLUMN updated_at TIMESTAMP(6) WITH TIME ZONE;

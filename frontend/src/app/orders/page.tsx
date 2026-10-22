@@ -2,123 +2,71 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Container } from "@/components/Container";
-import { Card } from "@/components/Card";
-import { Badge } from "@/components/Badge";
-import { Button } from "@/components/Button";
-import { getMyOrders, getRestaurants } from "@/lib/api";
+import { getMyOrders, getRestaurantById } from "@/lib/api";
 import { Order } from "@/types/order";
-import { Restaurant } from "@/types/restaurant";
 import { useAuth } from "@/context/AuthContext";
+import { PackageSearch, Clock, ChevronRight, Store, ArrowLeft } from "lucide-react";
 
-type OrderWithRestaurant = Order & { restaurantName: string };
-
-export default function MyOrdersPage() {
+export default function OrdersPage() {
   const router = useRouter();
-  const { user, loading, requireAuth } = useAuth();
-  const [orders, setOrders] = useState<OrderWithRestaurant[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  
+  const [orders, setOrders] = useState<(Order & { restaurantName?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
-  const fetchOrders = useCallback(async (isRetry = false) => {
-    if (loading) return;
+  const loadData = useCallback(async () => {
+    if (authLoading) return;
     if (!user) {
-      requireAuth(() => {});
+      router.push("/login?redirect=/orders");
       return;
     }
-    if (isRetry) {
-      setIsLoading(true);
-    }
-    setError(null);
 
     try {
-      // Fetch all required data in parallel
-      const [fetchedOrders, restaurants] = await Promise.all([
-        getMyOrders(),
-        getRestaurants().catch(() => [] as Restaurant[])
-      ]);
-
-      // Map restaurant names and sort by newest first (although backend does this, we do it here just in case)
-      const enrichedOrders = fetchedOrders.map((order) => {
-        const restaurant = restaurants.find((r) => r.id === order.restaurantId);
-        return {
-          ...order,
-          restaurantName: restaurant?.name || "Unknown Restaurant",
-        };
+      setIsLoading(true);
+      const ordersData = await getMyOrders();
+      
+      const ordersWithRestaurants = await Promise.all(
+        ordersData.map(async (order) => {
+          try {
+            const restaurant = await getRestaurantById(order.restaurantId);
+            return {
+              ...order,
+              restaurantName: restaurant?.name || `Restaurant #${order.restaurantId}`
+            };
+          } catch {
+            return { ...order, restaurantName: `Restaurant #${order.restaurantId}` };
+          }
+        })
+      );
+      
+      const sortedOrders = ordersWithRestaurants.sort((a, b) => {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
       });
-
-      setOrders(enrichedOrders);
+      
+      setOrders(sortedOrders);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load orders");
+      setError((err as Error).message || "Failed to load orders");
     } finally {
       setIsLoading(false);
     }
-  }, [router, user, loading, requireAuth]);
+  }, [user, authLoading, router]);
 
   useEffect(() => {
-    let ignore = false;
-    async function load() {
-      try {
-        if (ignore) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, [loadData]);
 
-        const [fetchedOrders, restaurants] = await Promise.all([
-          getMyOrders(),
-          getRestaurants().catch(() => [] as Restaurant[])
-        ]);
-
-        if (ignore) return;
-
-        const enrichedOrders = fetchedOrders.map((order) => {
-          const restaurant = restaurants.find((r) => r.id === order.restaurantId);
-          return {
-            ...order,
-            restaurantName: restaurant?.name || "Unknown Restaurant",
-          };
-        });
-
-        setOrders(enrichedOrders);
-        setIsLoading(false);
-      } catch (err: unknown) {
-        if (!ignore) {
-          setError(err instanceof Error ? err.message : "Failed to load orders");
-          setIsLoading(false);
-        }
-      }
-    }
-    if (user) {
-      load();
-    } else if (!loading) {
-      requireAuth(() => {});
-    }
-    return () => { ignore = true; };
-  }, [router, user, loading, requireAuth]);
-
-  const getStatusVariant = (status: string) => {
-    switch (status.toUpperCase()) {
-      case "CONFIRMED":
-        return "success";
-      case "CREATED":
-      case "PAYMENT_PENDING":
-        return "warning";
-      case "CANCELLED":
-        return "error";
-      default:
-        return "neutral";
-    }
-  };
-
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
-      <div className="flex-1 py-10 sm:py-16">
+      <div className="min-h-screen bg-stone-50 pt-24 pb-20">
         <Container>
-          <div className="mb-8">
-            <div className="h-10 w-1/4 bg-brand-border/60 rounded animate-pulse" />
-          </div>
-          <div className="space-y-6">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="p-6 h-32 bg-brand-border/40 animate-pulse rounded-xl">
-                <span className="sr-only">Loading</span>
-              </Card>
+          <div className="animate-pulse space-y-6">
+            <div className="h-10 w-48 bg-stone-200 rounded-lg" />
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-32 bg-stone-200 rounded-2xl" />
             ))}
           </div>
         </Container>
@@ -126,113 +74,70 @@ export default function MyOrdersPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex-1 py-20">
-        <Container>
-          <Card className="max-w-md mx-auto p-10 text-center bg-white shadow-xs border-rose-200">
-            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-rose-50 flex items-center justify-center text-rose-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-serif text-brand-fg mb-3">Error Loading Orders</h2>
-            <p className="text-brand-muted text-sm mb-8">{error}</p>
-            <Button onClick={() => fetchOrders(true)} variant="primary">
-              Try Again
-            </Button>
-          </Card>
-        </Container>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 py-10 sm:py-16">
-      <Container>
-        <div className="mb-8 sm:mb-12">
-          <Badge variant="default" className="mb-2">
-            History
-          </Badge>
-          <h1 className="text-4xl sm:text-5xl font-serif text-brand-fg tracking-tight">
-            My Orders
-          </h1>
-          <p className="text-brand-muted text-base mt-2">
-            Review your past orders and their status.
-          </p>
+    <div className="min-h-screen bg-stone-50 pt-24 pb-24">
+      <Container className="max-w-4xl">
+        <div className="mb-8 flex items-center gap-4">
+          <button onClick={() => router.push('/profile')} className="w-10 h-10 bg-white border border-stone-200 rounded-full flex items-center justify-center text-stone-600 hover:text-stone-900 transition-colors shadow-sm">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-3xl font-extrabold text-stone-900">My Orders</h1>
         </div>
 
-        {orders.length === 0 ? (
-          <Card className="max-w-md mx-auto p-10 text-center bg-white shadow-xs">
-            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-brand-bg flex items-center justify-center text-brand-muted">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
+        {error ? (
+          <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-100 font-medium">{error}</div>
+        ) : orders.length === 0 ? (
+          <div className="bg-white rounded-2xl p-16 text-center shadow-sm border border-stone-100 mt-12">
+            <div className="w-24 h-24 bg-stone-50 rounded-full flex items-center justify-center mb-6 mx-auto">
+              <PackageSearch className="w-12 h-12 text-stone-300" />
             </div>
-            <h2 className="text-2xl font-serif text-brand-fg mb-3">No orders yet</h2>
-            <p className="text-brand-muted text-sm mb-8">
-              Looks like you haven&apos;t placed any orders. Explore our curated restaurants and place your first order!
-            </p>
-            <Button href="/restaurants" variant="primary" className="w-full">
-              Explore Restaurants
-            </Button>
-          </Card>
+            <h2 className="text-2xl font-bold text-stone-900 mb-2">No orders yet</h2>
+            <p className="text-stone-500 mb-8 max-w-sm mx-auto">When you place an order, it will appear here so you can track it.</p>
+            <Link href="/restaurants" className="inline-flex items-center justify-center bg-brand-primary text-white font-bold px-8 py-3 rounded-xl hover:bg-brand-primary/90 transition-colors">
+              Find Food
+            </Link>
+          </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {orders.map((order) => {
-              const itemsCount = (order.items || []).reduce((acc, item) => acc + item.quantity, 0);
+              const isDelivered = order.status === 'DELIVERED';
+              const isCancelled = order.status === 'CANCELLED';
+              const isActive = !isDelivered && !isCancelled;
               
               return (
-                <Card key={order.id} className="p-6 sm:p-8 bg-white shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    
-                    {/* Left Info */}
-                    <div className="space-y-3 flex-1 min-w-0">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="font-serif text-xl sm:text-2xl font-medium text-brand-fg">
-                          {order.restaurantName}
-                        </span>
-                        <Badge variant={getStatusVariant(order.status)}>
-                          {order.status}
-                        </Badge>
+                <Link key={order.id} href={`/orders/${order.id}`} className="block bg-white rounded-2xl p-5 border border-stone-100 shadow-sm hover:shadow-md transition-shadow group">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Store className="w-5 h-5 text-stone-400" />
+                        <h3 className="font-bold text-stone-900 text-lg">{order.restaurantName}</h3>
                       </div>
-                      
-                      <div className="flex items-center flex-wrap gap-x-4 gap-y-2 text-sm text-brand-muted">
-                        <span className="font-mono text-xs bg-brand-bg px-2 py-0.5 rounded border border-brand-border text-brand-fg shrink-0">
-                          Order #{order.id}
-                        </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          {new Date(order.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                          {itemsCount} {itemsCount === 1 ? 'item' : 'items'}
+                      <div className="flex items-center gap-4 text-sm font-medium">
+                        <span className="text-stone-500">Order #{order.id}</span>
+                        <span className="text-stone-300">•</span>
+                        <span className="text-stone-500">₹{order.totalAmount.toFixed(2)}</span>
+                        <span className="text-stone-300">•</span>
+                        <span className="text-stone-500 flex items-center gap-1">
+                          <Clock className="w-4 h-4" /> 
+                          {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'Recent'}
                         </span>
                       </div>
-                      
-                      {order.items && order.items.length > 0 && (
-                        <p className="text-sm text-brand-muted truncate">
-                          {order.items.map(i => `${i.quantity}× ${i.name}`).join(', ')}
-                        </p>
-                      )}
                     </div>
                     
-                    {/* Right Info */}
-                    <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-4 shrink-0 mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-brand-border">
-                      <div className="text-left md:text-right">
-                        <p className="text-xs text-brand-muted mb-0.5 uppercase tracking-wider font-semibold">Total</p>
-                        <p className="font-serif text-xl sm:text-2xl font-semibold text-brand-primary">
-                          ₹{order.totalAmount.toFixed(2)}
-                        </p>
+                    <div className="flex flex-col items-end gap-3">
+                      <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        isActive ? 'bg-amber-100 text-amber-700' :
+                        isDelivered ? 'bg-green-100 text-green-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {order.status.replace(/_/g, ' ')}
                       </div>
-                      <Button href={`/orders/${order.id}`} variant="outline" className="w-full md:w-auto">
-                        View Order
-                      </Button>
+                      <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center group-hover:bg-brand-primary/10 transition-colors">
+                        <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-brand-primary" />
+                      </div>
                     </div>
-
                   </div>
-                </Card>
+                </Link>
               );
             })}
           </div>

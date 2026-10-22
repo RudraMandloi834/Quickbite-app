@@ -13,6 +13,13 @@ public class SseService {
     private final Map<Long, List<SseEmitter>> restaurantEmitters = new ConcurrentHashMap<>();
     private final Map<Long, List<SseEmitter>> driverEmitters = new ConcurrentHashMap<>();
     private final List<SseEmitter> adminEmitters = new CopyOnWriteArrayList<>();
+    public int getActiveClientCount() {
+        return customerEmitters.values().stream().mapToInt(List::size).sum() +
+               restaurantEmitters.values().stream().mapToInt(List::size).sum() +
+               driverEmitters.values().stream().mapToInt(List::size).sum() +
+               adminEmitters.size();
+    }
+
     public SseEmitter subscribe(Long userId, String role) {
         SseEmitter emitter = new SseEmitter(0L);
         if ("ROLE_OPERATOR".equals(role)) adminEmitters.add(emitter);
@@ -23,6 +30,11 @@ public class SseService {
         emitter.onCompletion(cleanup);
         emitter.onTimeout(cleanup);
         emitter.onError((e) -> cleanup.run());
+        try {
+            emitter.send(SseEmitter.event().name("INIT").data("{\"type\":\"INIT\"}"));
+        } catch (IOException e) {
+            emitter.complete();
+        }
         return emitter;
     }
     private void removeEmitter(Long userId, String role, SseEmitter emitter) {
@@ -39,15 +51,15 @@ public class SseService {
         }
     }
     public void emitToCustomer(Long customerId, SystemEvent event) {
-        List<SseEmitter> list = customerEmitters.get(customerId);
+        if(customerId == null) return; List<SseEmitter> list = customerEmitters.get(customerId);
         if (list != null) sendEvent(list, event);
     }
     public void emitToRestaurant(Long restaurantOwnerId, SystemEvent event) {
-        List<SseEmitter> list = restaurantEmitters.get(restaurantOwnerId);
+        if(restaurantOwnerId == null) return; List<SseEmitter> list = restaurantEmitters.get(restaurantOwnerId);
         if (list != null) sendEvent(list, event);
     }
     public void emitToDriver(Long driverId, SystemEvent event) {
-        List<SseEmitter> list = driverEmitters.get(driverId);
+        if(driverId == null) return; List<SseEmitter> list = driverEmitters.get(driverId);
         if (list != null) sendEvent(list, event);
     }
     public void emitToAllDrivers(SystemEvent event) {
@@ -57,12 +69,19 @@ public class SseService {
         sendEvent(adminEmitters, event);
     }
     private void sendEvent(List<SseEmitter> emitters, SystemEvent event) {
+        List<SseEmitter> deadEmitters = new java.util.ArrayList<>();
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().id(event.getEventId()).name(event.getType()).data(event));
-            } catch (IOException e) {
-                emitter.complete();
+            } catch (Exception e) {
+                deadEmitters.add(emitter);
+                try {
+                    emitter.complete();
+                } catch (Exception ignored) {}
             }
+        }
+        if (!deadEmitters.isEmpty()) {
+            emitters.removeAll(deadEmitters);
         }
     }
     @Scheduled(fixedRate = 15000)

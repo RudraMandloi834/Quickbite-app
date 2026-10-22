@@ -20,7 +20,7 @@ export function DeliveryTracker({ delivery }: { delivery: Delivery | null }) {
   if (!delivery) {
     return (
       <div className="p-6 bg-white shadow-xs rounded-2xl border border-brand-border/40">
-        <h2 className="font-serif text-xl font-medium text-brand-fg mb-2">Preparing Delivery</h2>
+        <h2 className="font-sans text-xl font-medium text-brand-fg mb-2">Preparing Delivery</h2>
         <p className="text-sm text-brand-muted">Your order is confirmed. We will assign a delivery partner shortly.</p>
         <div className="mt-4 animate-pulse flex space-x-2">
           <div className="h-2 w-2 bg-brand-primary/60 rounded-full"></div>
@@ -34,7 +34,7 @@ export function DeliveryTracker({ delivery }: { delivery: Delivery | null }) {
   if (delivery.status === "CANCELLED") {
     return (
       <div className="p-6 bg-white shadow-xs rounded-2xl border border-brand-border/40">
-        <h2 className="font-serif text-xl font-medium text-brand-fg mb-2">Delivery Cancelled</h2>
+        <h2 className="font-sans text-xl font-medium text-brand-fg mb-2">Delivery Cancelled</h2>
         <p className="text-sm text-brand-muted">Unfortunately, this delivery was cancelled.</p>
       </div>
     );
@@ -44,7 +44,7 @@ export function DeliveryTracker({ delivery }: { delivery: Delivery | null }) {
 
   return (
     <div className="p-6 sm:p-8 bg-white shadow-xs rounded-2xl border border-brand-border/40">
-      <h2 className="font-serif text-xl font-medium text-brand-fg mb-6 pb-4 border-b border-brand-border">
+      <h2 className="font-sans text-xl font-medium text-brand-fg mb-6 pb-4 border-b border-brand-border">
         Delivery Tracking
       </h2>
 

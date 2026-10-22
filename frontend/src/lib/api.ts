@@ -6,6 +6,14 @@ import { Payment, PaymentInitiationResponse, PaymentVerificationRequest } from "
 import { Delivery } from "@/types/delivery";
 import { getAuthHeaders, getUser } from "@/lib/auth";
 
+export interface Page<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
 export const getApiBaseUrl = (): string => {
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 };
@@ -13,16 +21,24 @@ export const getApiBaseUrl = (): string => {
 
 // --- Public Endpoints ---
 
-export async function getRestaurants(): Promise<Restaurant[]> {
-  const res = await fetch(`${getApiBaseUrl()}/api/restaurants`, {
+export async function getRestaurants(params?: Record<string, string>): Promise<Page<Restaurant>> {
+  const urlParams = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        urlParams.append(key, value);
+      }
+    });
+  }
+  const res = await fetch(`${getApiBaseUrl()}/api/restaurants?${urlParams.toString()}`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Failed to fetch restaurants`);
   return res.json();
 }
 
-export async function getNearbyRestaurants(latitude: number, longitude: number, radiusKm: number = 10): Promise<Restaurant[]> {
-  const params = new URLSearchParams({ latitude: latitude.toString(), longitude: longitude.toString(), radiusKm: radiusKm.toString() });
+export async function getNearbyRestaurants(latitude: number, longitude: number, radiusKm: number = 10, page: number = 0, size: number = 16): Promise<Page<Restaurant>> {
+  const params = new URLSearchParams({ latitude: latitude.toString(), longitude: longitude.toString(), radiusKm: radiusKm.toString(), page: page.toString(), size: size.toString() });
   const res = await fetch(`${getApiBaseUrl()}/api/restaurants/nearby?${params.toString()}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Failed to fetch nearby restaurants`);
   return res.json();
@@ -35,10 +51,12 @@ export async function getRestaurantMenu(restaurantId: number | string): Promise<
 }
 
 export async function getRestaurantById(restaurantId: number | string): Promise<Restaurant | null> {
-  const restaurants = await getRestaurants();
-  const idNum = typeof restaurantId === "string" ? parseInt(restaurantId, 10) : restaurantId;
-  const match = restaurants.find((r) => r.id === idNum);
-  return match || null;
+  const res = await fetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}`, { cache: "no-store" });
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    throw new Error(`Failed to fetch restaurant details`);
+  }
+  return res.json();
 }
 
 // --- Protected Endpoints ---
@@ -52,7 +70,27 @@ export class ApiError extends Error {
 }
 
 export async function authFetch(url: string, options: RequestInit = {}) {
-  const headers = { ...options.headers, ...getAuthHeaders() };
+  const customHeaders: Record<string, string> = {};
+  if (options.headers) {
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((val, key) => { customHeaders[key] = val; });
+    } else if (Array.isArray(options.headers)) {
+      options.headers.forEach(([k, v]) => { customHeaders[k] = v; });
+    } else {
+      Object.assign(customHeaders, options.headers);
+    }
+  }
+
+  if (options.body && typeof options.body === "string") {
+    const hasContentType = Object.keys(customHeaders).some(
+      (k) => k.toLowerCase() === "content-type"
+    );
+    if (!hasContentType) {
+      customHeaders["Content-Type"] = "application/json";
+    }
+  }
+
+  const headers = { ...customHeaders, ...getAuthHeaders() };
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
     if (typeof window !== "undefined") {
@@ -217,7 +255,25 @@ export async function updateDeliveryStatus(deliveryId: number, status: string): 
 // --- Restaurant Onboarding Endpoints ---
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function applyForRestaurant(data: any): Promise<Restaurant> {
+export interface CreateRestaurantRequest {
+  name: string;
+  cuisine: string;
+  phone: string;
+  email: string;
+  city: string;
+  location: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  openingTime: string;
+  closingTime: string;
+  coverImageUrl?: string;
+  area?: string;
+  rating?: number;
+  deliveryRadius?: number;
+}
+
+export async function applyForRestaurant(data: CreateRestaurantRequest): Promise<Restaurant> {
   const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/apply`, {
     method: "POST",
     headers: {
@@ -255,30 +311,57 @@ export async function getMyStaffRequests(): Promise<RestaurantStaffProfile[]> {
   return res.json();
 }
 
-export const getPendingRestaurants = async (): Promise<Restaurant[]> => {
-  const res = await authFetch(`${getApiBaseUrl()}/api/operator/restaurants/pending`);
+
+export interface RestaurantAdminDTO {
+  id: number;
+  name: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone: string;
+  city: string;
+  locality: string;
+  address: string;
+  cuisine: string;
+  status: string;
+  tempPassword?: string;
+  createdAt: string;
+}
+
+export const getPendingRestaurants = async (): Promise<RestaurantAdminDTO[]> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/restaurants/pending`);
   if (!res.ok) throw new Error("Failed to fetch pending restaurants");
   return res.json();
 };
 
-export interface ApprovalResponse { restaurant: Restaurant; username: string; temporaryPassword?: string; }
-export const approveRestaurant = async (restaurantId: number): Promise<ApprovalResponse> => {
-  const res = await authFetch(`${getApiBaseUrl()}/api/operator/restaurants/${restaurantId}/approve`, {
-    method: "POST"
+export const getApprovedRestaurants = async (): Promise<RestaurantAdminDTO[]> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/restaurants/approved`);
+  if (!res.ok) throw new Error("Failed to fetch approved restaurants");
+  return res.json();
+};
+
+export const getRejectedRestaurants = async (): Promise<RestaurantAdminDTO[]> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/restaurants/rejected`);
+  if (!res.ok) throw new Error("Failed to fetch rejected restaurants");
+  return res.json();
+};
+
+export const approveRestaurant = async (restaurantId: number): Promise<RestaurantAdminDTO> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/restaurants/${restaurantId}/approve`, {
+    method: "PUT"
   });
   if (!res.ok) throw new Error("Failed to approve restaurant");
   return res.json();
 };
 
-export const rejectRestaurant = async (restaurantId: number, reason: string): Promise<Restaurant> => {
-  const res = await authFetch(`${getApiBaseUrl()}/api/operator/restaurants/${restaurantId}/reject`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason })
+export const rejectRestaurant = async (restaurantId: number, reason: string): Promise<RestaurantAdminDTO> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/restaurants/${restaurantId}/reject`, {
+    method: "PUT"
   });
   if (!res.ok) throw new Error("Failed to reject restaurant");
   return res.json();
 };
+
+
 
 export const getRestaurantDashboardSummary = async (restaurantId: number) => {
   const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/${restaurantId}/dashboard-summary`);
@@ -337,6 +420,7 @@ export interface RestaurantJoinRequest {
   restaurantId: number;
   userId: number;
   status: string;
+  tempPassword?: string;
   createdAt: string;
 }
 
@@ -386,5 +470,11 @@ export async function rejectJoinRequest(requestId: number): Promise<RestaurantJo
     method: "POST"
   });
   if (!res.ok) throw new ApiError(`Failed to reject`, res.status);
+  return res.json();
+}
+
+export async function getCities(): Promise<string[]> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/cities`);
+  if (!res.ok) return [];
   return res.json();
 }

@@ -47,8 +47,8 @@ public class RestaurantDashboardController {
                 
         List<Order> allOrders = orderRepository.findTop50ByRestaurantIdOrderByCreatedAtDesc(restaurantId);
         
-        long pending = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.PAYMENT_PENDING).count();
-        long active = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.CONFIRMED || o.getStatus() == OrderStatus.PREPARING || o.getStatus() == OrderStatus.READY_FOR_PICKUP).count();
+        long pending = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.PLACED).count();
+        long active = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED || o.getStatus() == OrderStatus.PREPARING || o.getStatus() == OrderStatus.READY_FOR_PICKUP).count();
         
         List<Order> recent = allOrders.stream().limit(5).collect(Collectors.toList());
         

@@ -28,6 +28,15 @@ public class Order {
     private OrderStatus status;
     private Instant createdAt;
 
+    private Instant acceptedAt;
+    private Instant preparingAt;
+    private Instant readyAt;
+    private Instant assignedAt;
+    private Instant pickedUpAt;
+    private Instant outForDeliveryAt;
+    private Instant deliveredAt;
+
+
     @Transient
     private List<OrderItem> items = List.of();
 
@@ -38,7 +47,7 @@ public class Order {
         this.customerId = customerId;
         this.restaurantId = restaurantId;
         this.totalAmount = totalAmount;
-        this.status = OrderStatus.CREATED;
+        this.status = OrderStatus.PLACED;
         this.createdAt = Instant.now();
     }
 
@@ -70,13 +79,7 @@ public class Order {
         return items;
     }
 
-    public void cancel() {
-        this.status = OrderStatus.CANCELLED;
-    }
-
-    public void confirm() {
-        this.status = OrderStatus.CONFIRMED;
-    }
+    
 
     public void setItems(List<OrderItem> items) {
         this.items = items;
@@ -84,4 +87,47 @@ public class Order {
     public void setStatus(OrderStatus status) {
         this.status = status;
     }
+
+    @jakarta.persistence.Transient
+    private String customerName;
+    @jakarta.persistence.Transient
+    private String customerPhone;
+    @jakarta.persistence.Transient
+    private String deliveryAddress;
+    @jakarta.persistence.Transient
+    private String paymentMethod;
+
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String customerName) { this.customerName = customerName; }
+    public String getCustomerPhone() { return customerPhone; }
+    public void setCustomerPhone(String customerPhone) { this.customerPhone = customerPhone; }
+    public String getDeliveryAddress() { return deliveryAddress; }
+    public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+
+    public Instant getAcceptedAt() { return acceptedAt; }
+    public void setAcceptedAt(Instant acceptedAt) { this.acceptedAt = acceptedAt; }
+    public Instant getPreparingAt() { return preparingAt; }
+    public void setPreparingAt(Instant preparingAt) { this.preparingAt = preparingAt; }
+    public Instant getReadyAt() { return readyAt; }
+    public void setReadyAt(Instant readyAt) { this.readyAt = readyAt; }
+    public Instant getAssignedAt() { return assignedAt; }
+    public void setAssignedAt(Instant assignedAt) { this.assignedAt = assignedAt; }
+    public Instant getPickedUpAt() { return pickedUpAt; }
+    public void setPickedUpAt(Instant pickedUpAt) { this.pickedUpAt = pickedUpAt; }
+    public Instant getOutForDeliveryAt() { return outForDeliveryAt; }
+    public void setOutForDeliveryAt(Instant outForDeliveryAt) { this.outForDeliveryAt = outForDeliveryAt; }
+    public Instant getDeliveredAt() { return deliveredAt; }
+    public void setDeliveredAt(Instant deliveredAt) { this.deliveredAt = deliveredAt; }
+
+    @jakarta.persistence.Transient
+    private String driverName;
+    @jakarta.persistence.Transient
+    private String driverPhone;
+
+    public String getDriverName() { return driverName; }
+    public void setDriverName(String driverName) { this.driverName = driverName; }
+    public String getDriverPhone() { return driverPhone; }
+    public void setDriverPhone(String driverPhone) { this.driverPhone = driverPhone; }
 }

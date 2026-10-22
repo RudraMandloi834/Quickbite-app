@@ -1,0 +1,3 @@
+ALTER TABLE orders ALTER COLUMN status SET DATA TYPE VARCHAR(255);
+ALTER TABLE order_status_history ALTER COLUMN previous_status SET DATA TYPE VARCHAR(255);
+ALTER TABLE order_status_history ALTER COLUMN new_status SET DATA TYPE VARCHAR(255);

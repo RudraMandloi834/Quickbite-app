@@ -1,0 +1,4 @@
+ALTER TABLE restaurant ADD COLUMN phone VARCHAR(255);
+ALTER TABLE restaurant ADD COLUMN email VARCHAR(255);
+ALTER TABLE restaurant ADD COLUMN opening_time VARCHAR(255);
+ALTER TABLE restaurant ADD COLUMN closing_time VARCHAR(255);

@@ -107,7 +107,7 @@ export function AuthModal({ isOpen, onClose, defaultView = "login" }: { isOpen: 
             style={{ backfaceVisibility: "hidden" }}
           >
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-serif font-semibold text-brand-fg">Welcome back</h2>
+              <h2 className="text-2xl font-sans font-semibold text-brand-fg">Welcome back</h2>
               <button onClick={onClose} className="text-brand-muted hover:text-brand-fg transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
@@ -167,7 +167,7 @@ export function AuthModal({ isOpen, onClose, defaultView = "login" }: { isOpen: 
             style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
           >
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-serif font-semibold text-brand-fg">Create account</h2>
+              <h2 className="text-2xl font-sans font-semibold text-brand-fg">Create account</h2>
               <button onClick={onClose} className="text-brand-muted hover:text-brand-fg transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>

@@ -44,6 +44,13 @@ public class CustomerController {
         return customerService.createCustomer(request);
     }
 
+
+    @GetMapping("/me")
+    public Customer getMe() {
+        Long customerId = SecurityUtils.getAuthenticatedCustomerId();
+        return customerService.getCustomer(customerId);
+    }
+
     @GetMapping("/{customerId}")
     public Customer getCustomer(@PathVariable Long customerId) {
         Long authId = SecurityUtils.getAuthenticatedCustomerId();

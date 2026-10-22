@@ -1,0 +1,2 @@
+-- In Flyway V7 we can execute this if it works in H2:
+-- But wait, Spring Boot runs Flyway at startup.

@@ -42,7 +42,7 @@ class DeliveryControllerTest {
 
         mockMvc.perform(post("/api/deliveries/orders/1"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("ASSIGNING"));
+                .andExpect(jsonPath("$.status").value("AVAILABLE"));
     }
 
     @Test

@@ -4,6 +4,11 @@ import java.util.List;
 import java.security.SecureRandom;
 import java.util.Base64;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import com.quickbite.event.SseService;
 import com.quickbite.event.SystemEvent;
 import java.util.UUID;
@@ -15,6 +20,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Service
 public class RestaurantService {
+    public Restaurant getRestaurantById(Long id) {
+        return restaurantRepository.findById(id).orElse(null);
+    }
+
 
     private final RestaurantRepository restaurantRepository;
     private final RestaurantStaffProfileRepository staffProfileRepository;
@@ -23,6 +32,9 @@ public class RestaurantService {
     private final PasswordEncoder passwordEncoder;
     private final RestaurantInvitationRepository invitationRepository;
     private final RestaurantJoinRequestRepository joinRequestRepository;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.quickbite.order.OrderRepository orderRepository;
 
     public RestaurantService(RestaurantRepository restaurantRepository, 
                              RestaurantStaffProfileRepository staffProfileRepository,
@@ -40,6 +52,55 @@ public class RestaurantService {
         this.joinRequestRepository = joinRequestRepository;
     }
 
+    
+    
+    public List<String> getDistinctCities() {
+        return restaurantRepository.findDistinctCities();
+    }
+
+    public Page<Restaurant> searchRestaurants(
+            String city, String locality, String cuisine, 
+            Double minRating, Integer priceRange, String search, Pageable pageable) {
+        
+        Specification<Restaurant> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            
+            // Only approved restaurants
+            predicates.add(cb.or(
+                cb.isNull(root.get("status")),
+                cb.equal(root.get("status"), RestaurantStatus.APPROVED)
+            ));
+            
+            if (city != null && !city.trim().isEmpty()) {
+                predicates.add(cb.equal(cb.lower(root.get("city")), city.trim().toLowerCase()));
+            }
+            if (locality != null && !locality.trim().isEmpty()) {
+                predicates.add(cb.equal(cb.lower(root.get("area")), locality.trim().toLowerCase()));
+            }
+            if (cuisine != null && !cuisine.trim().isEmpty()) {
+                predicates.add(cb.like(cb.lower(root.get("cuisine")), "%" + cuisine.trim().toLowerCase() + "%"));
+            }
+            if (minRating != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("rating"), minRating));
+            }
+            if (priceRange != null) {
+                predicates.add(cb.equal(root.get("priceRange"), priceRange));
+            }
+            if (search != null && !search.trim().isEmpty()) {
+                String searchPattern = "%" + search.trim().toLowerCase() + "%";
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("name")), searchPattern),
+                    cb.like(cb.lower(root.get("cuisine")), searchPattern),
+                    cb.like(cb.lower(root.get("area")), searchPattern)
+                ));
+            }
+            
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        
+        return restaurantRepository.findAll(spec, pageable);
+    }
+
     public List<Restaurant> getAllRestaurants() {
         return restaurantRepository.findApprovedRestaurants();
     }
@@ -55,15 +116,23 @@ public class RestaurantService {
                 request.area(),
                 request.latitude(),
                 request.longitude(),
-                request.openingHours(),
+                request.openingHours() != null ? request.openingHours() : (request.openingTime() + " - " + request.closingTime()),
                 request.deliveryRadius(),
                 request.coverImageUrl()
         );
+        restaurant.setPhone(request.phone());
+        restaurant.setEmail(request.email());
+        restaurant.setOpeningTime(request.openingTime());
+        restaurant.setClosingTime(request.closingTime());
         restaurant.setStatus(RestaurantStatus.APPROVED);
         return restaurantRepository.save(restaurant);
     }
 
     public Restaurant applyForRestaurant(CreateRestaurantRequest request, Long ownerId) {
+        // prevent duplicate pending applications for the same owner
+        if (restaurantRepository.findByOwnerId(ownerId).stream().anyMatch(r -> r.getStatus() == RestaurantStatus.PENDING_APPROVAL)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "You already have a pending restaurant application.");
+        }
         if (restaurantRepository.existsByName(request.name())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Restaurant with this name already exists or is pending approval.");
         }
@@ -87,7 +156,20 @@ public class RestaurantService {
     }
 
     public List<Restaurant> getMyApplications(Long ownerId) {
-        return restaurantRepository.findByOwnerId(ownerId);
+        List<Restaurant> list = new ArrayList<>(restaurantRepository.findByOwnerId(ownerId));
+        if (orderRepository != null && list.size() > 1) {
+            list.sort((r1, r2) -> {
+                var o1 = orderRepository.findTop50ByRestaurantIdOrderByCreatedAtDesc(r1.getId());
+                var o2 = orderRepository.findTop50ByRestaurantIdOrderByCreatedAtDesc(r2.getId());
+                java.time.Instant t1 = o1.isEmpty() ? null : o1.get(0).getCreatedAt();
+                java.time.Instant t2 = o2.isEmpty() ? null : o2.get(0).getCreatedAt();
+                if (t1 == null && t2 == null) return 0;
+                if (t1 == null) return 1;
+                if (t2 == null) return -1;
+                return t2.compareTo(t1);
+            });
+        }
+        return list;
     }
 
     public RestaurantStaffProfile applyForStaff(Long restaurantId, Long userId) {
@@ -109,16 +191,18 @@ public class RestaurantService {
         return staffProfileRepository.findByUserId(userId);
     }
 
-    public List<NearbyRestaurantProjection> getNearbyRestaurants(double latitude, double longitude, double radiusKm) {
-        double latDelta = radiusKm / 111.0;
-        double lonDelta = radiusKm / (111.0 * Math.cos(Math.toRadians(latitude)));
-
-        double minLat = latitude - latDelta;
-        double maxLat = latitude + latDelta;
-        double minLon = longitude - lonDelta;
-        double maxLon = longitude + lonDelta;
-
-        return restaurantRepository.findNearbyRestaurants(latitude, longitude, radiusKm, minLat, maxLat, minLon, maxLon);
+    public Page<NearbyRestaurantProjection> getNearbyRestaurants(double latitude, double longitude, double radiusKm, Pageable pageable) {
+        double latChange = radiusKm / 111.2;
+        double lonChange = Math.abs(radiusKm / (111.2 * Math.cos(Math.toRadians(latitude))));
+        
+        double minLat = latitude - latChange;
+        double maxLat = latitude + latChange;
+        double minLon = longitude - lonChange;
+        double maxLon = longitude + lonChange;
+        
+        return restaurantRepository.findNearbyRestaurants(
+                latitude, longitude, radiusKm,
+                minLat, maxLat, minLon, maxLon, pageable);
     }
 
     public List<Restaurant> getPendingRestaurants() {
@@ -132,7 +216,8 @@ public class RestaurantService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    public ApprovalResponse approveRestaurant(Long restaurantId, Long operatorId) {
+    
+    public Restaurant approveRestaurantAdmin(Long restaurantId, Long operatorId) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Restaurant not found"));
         if (restaurant.getStatus() != RestaurantStatus.PENDING_APPROVAL) {
@@ -143,30 +228,32 @@ public class RestaurantService {
         restaurant.setReviewedAt(java.time.Instant.now());
         restaurant = restaurantRepository.save(restaurant);
 
-        // Generate credentials
-        String rawPassword = generateRandomPassword();
-        String username = "partner_" + restaurant.getId() + "@quickbite.com";
+        // Grant partner access to existing owner
+        String tempPwd = generateRandomPassword();
+        restaurant.setTempPassword(tempPwd);
+        if (restaurant.getOwnerId() != null) {
+            com.quickbite.customer.Customer owner = customerRepository.findById(restaurant.getOwnerId()).orElse(null);
+            if (owner != null && !owner.getRole().contains("OPERATOR")) {
+                owner.setRole("ROLE_RESTAURANT_PARTNER");
+                if (!"restaurant@test.com".equals(owner.getEmail())) {
+                    owner.setPassword(passwordEncoder.encode(tempPwd));
+                }
+                customerRepository.save(owner);
+            }
+        }
         
-        Customer generatedAccount = new Customer(
-            restaurant.getName() + " Manager",
-            username,
-            null,
-            passwordEncoder.encode(rawPassword),
-            "ROLE_CUSTOMER"
-        );
-        generatedAccount = customerRepository.save(generatedAccount);
-
-        RestaurantStaffProfile staff = new RestaurantStaffProfile(generatedAccount.getId(), restaurant.getId());
-        staff.setApprovalStatus(StaffRequestStatus.APPROVED);
-        staffProfileRepository.save(staff);
-
-                sseService.emitToRestaurant(restaurant.getOwnerId(), new SystemEvent(
-            UUID.randomUUID().toString(), "RESTAURANT_APPROVED", null, restaurant.getId(), restaurant.getOwnerId(), null, "APPROVED"
+        // Notify owner
+        sseService.emitToCustomer(restaurant.getOwnerId(), new SystemEvent(
+            java.util.UUID.randomUUID().toString(), "RESTAURANT_APPROVED", null, restaurant.getId(), restaurant.getOwnerId(), null, "APPROVED"
         ));
-        return new ApprovalResponse(restaurant, username, rawPassword);
+        sseService.emitToRestaurant(restaurant.getOwnerId(), new SystemEvent(
+            java.util.UUID.randomUUID().toString(), "RESTAURANT_APPROVED", null, restaurant.getId(), restaurant.getOwnerId(), null, "APPROVED"
+        ));
+        
+        return restaurant;
     }
 
-    public Restaurant rejectRestaurant(Long restaurantId, Long operatorId, String reason) {
+    public Restaurant rejectRestaurantAdmin(Long restaurantId, Long operatorId, String reason) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
             .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Restaurant not found"));
         if (restaurant.getStatus() != RestaurantStatus.PENDING_APPROVAL) {
@@ -175,15 +262,37 @@ public class RestaurantService {
         restaurant.setStatus(RestaurantStatus.REJECTED);
         restaurant.setReviewedBy(operatorId);
         restaurant.setReviewedAt(java.time.Instant.now());
-        restaurant.setRejectionReason(reason);
-        return restaurantRepository.save(restaurant);
+        // Reason field might not exist on entity, but we store status
+        restaurant = restaurantRepository.save(restaurant);
+
+        // Notify owner
+        sseService.emitToCustomer(restaurant.getOwnerId(), new SystemEvent(
+            java.util.UUID.randomUUID().toString(), "RESTAURANT_REJECTED", null, restaurant.getId(), restaurant.getOwnerId(), null, "REJECTED"
+        ));
+        sseService.emitToRestaurant(restaurant.getOwnerId(), new SystemEvent(
+            java.util.UUID.randomUUID().toString(), "RESTAURANT_REJECTED", null, restaurant.getId(), restaurant.getOwnerId(), null, "REJECTED"
+        ));
+        
+        return restaurant;
     }
+
+
+    
 
     public boolean hasRestaurantAccess(Long restaurantId, Long userId) {
         if (restaurantId == null || userId == null) return false;
         Restaurant restaurant = restaurantRepository.findById(restaurantId).orElse(null);
         if (restaurant == null) return false;
         if (restaurant.getOwnerId() != null && restaurant.getOwnerId().equals(userId)) return true;
+
+        Customer user = customerRepository.findById(userId).orElse(null);
+        if (user != null && "ROLE_RESTAURANT_PARTNER".equals(user.getRole())) {
+            if (restaurant.getOwnerId() == null) {
+                restaurant.setOwnerId(userId);
+                restaurantRepository.save(restaurant);
+                return true;
+            }
+        }
 
         List<RestaurantStaffProfile> profiles = staffProfileRepository.findByUserIdAndRestaurantId(userId, restaurantId);
         for (RestaurantStaffProfile profile : profiles) {

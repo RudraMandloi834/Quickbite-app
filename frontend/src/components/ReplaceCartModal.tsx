@@ -65,7 +65,7 @@ export function ReplaceCartModal({
             </div>
           </div>
           
-          <h2 id="modal-title" className="text-2xl font-serif font-semibold text-brand-fg text-center mb-3">
+          <h2 id="modal-title" className="text-2xl font-sans font-semibold text-brand-fg text-center mb-3">
             Replace your cart with {newRestaurant?.name}?
           </h2>
           
@@ -80,7 +80,7 @@ export function ReplaceCartModal({
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-stone-200 overflow-hidden border border-brand-border/50 shrink-0">
                   {/* Subtle placeholder/avatar for restaurant */}
-                  <div className="w-full h-full flex items-center justify-center bg-brand-fg text-brand-bg font-serif text-sm">
+                  <div className="w-full h-full flex items-center justify-center bg-brand-fg text-brand-bg font-sans text-sm">
                     {currentCart?.restaurantName.charAt(0)}
                   </div>
                 </div>
@@ -106,7 +106,7 @@ export function ReplaceCartModal({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-brand-primary overflow-hidden border border-brand-primary/20 shrink-0">
-                  <div className="w-full h-full flex items-center justify-center text-white font-serif text-sm">
+                  <div className="w-full h-full flex items-center justify-center text-white font-sans text-sm">
                     {newRestaurant?.name.charAt(0)}
                   </div>
                 </div>

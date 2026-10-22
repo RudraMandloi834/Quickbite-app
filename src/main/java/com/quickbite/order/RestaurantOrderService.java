@@ -8,6 +8,10 @@ import org.springframework.web.server.ResponseStatusException;
 import com.quickbite.restaurant.RestaurantService;
 import com.quickbite.security.SecurityUtils;
 import java.util.List;
+import com.quickbite.customer.Customer;
+import com.quickbite.customer.CustomerRepository;
+import com.quickbite.delivery.DeliveryRepository;
+import com.quickbite.delivery.Delivery;
 
 @Service
 public class RestaurantOrderService {
@@ -16,6 +20,8 @@ public class RestaurantOrderService {
     private final OrderItemRepository orderItemRepository;
     private final RestaurantService restaurantService;
     private final OrderEventPublisher orderEventPublisher;
+    private final CustomerRepository customerRepository;
+    private final DeliveryRepository deliveryRepository;
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private OrderLifecycleService lifecycleService;
@@ -24,11 +30,15 @@ public class RestaurantOrderService {
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
             RestaurantService restaurantService,
-            OrderEventPublisher orderEventPublisher) {
+            OrderEventPublisher orderEventPublisher,
+            CustomerRepository customerRepository,
+            DeliveryRepository deliveryRepository) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.restaurantService = restaurantService;
         this.orderEventPublisher = orderEventPublisher;
+        this.customerRepository = customerRepository;
+        this.deliveryRepository = deliveryRepository;
     }
 
     public List<Order> getRestaurantOrders(Long restaurantId) {
@@ -41,6 +51,19 @@ public class RestaurantOrderService {
         List<Order> orders = orderRepository.findTop50ByRestaurantIdOrderByCreatedAtDesc(restaurantId);
         for (Order order : orders) {
             order.setItems(orderItemRepository.findByOrderId(order.getId()));
+            Customer c = customerRepository.findById(order.getCustomerId()).orElse(null);
+            if (c != null) {
+                order.setCustomerName(c.getName());
+                order.setCustomerPhone(c.getPhone());
+            }
+            order.setDeliveryAddress("Pending Delivery System Address");
+            
+            order.setPaymentMethod("CARD");
+            Delivery delivery = deliveryRepository.findByOrderId(order.getId()).orElse(null);
+            if (delivery != null) {
+                order.setDriverName(delivery.getDriverName());
+                order.setDriverPhone(delivery.getDriverPhone());
+            }
         }
         return orders;
     }
@@ -60,6 +83,19 @@ public class RestaurantOrderService {
         }
         
         order.setItems(orderItemRepository.findByOrderId(orderId));
+        Customer c = customerRepository.findById(order.getCustomerId()).orElse(null);
+        if (c != null) {
+            order.setCustomerName(c.getName());
+            order.setCustomerPhone(c.getPhone());
+        }
+        order.setDeliveryAddress("Pending Delivery System Address");
+        
+            order.setPaymentMethod("CARD");
+            Delivery delivery = deliveryRepository.findByOrderId(order.getId()).orElse(null);
+            if (delivery != null) {
+                order.setDriverName(delivery.getDriverName());
+                order.setDriverPhone(delivery.getDriverPhone());
+            }
         return order;
     }
 

@@ -26,6 +26,7 @@ public class SystemEvent {
     public Long getRestaurantId() { return restaurantId; }
     public Long getCustomerId() { return customerId; }
     public Long getDriverId() { return driverId; }
+    public void setDriverId(Long driverId) { this.driverId = driverId; }
     public String getStatus() { return status; }
     public Instant getOccurredAt() { return occurredAt; }
 }

@@ -1,350 +1,597 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/Container";
 import { Card, CardContent } from "@/components/Card";
+import { Input } from "@/components/Input";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
+import { Skeleton } from "@/components/Skeleton";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
-import { getRestaurants, getNearbyRestaurants } from "@/lib/api";
+import { getRestaurants, getNearbyRestaurants, getCities, Page } from "@/lib/api";
+import { Navigation } from "lucide-react";
 import { Restaurant } from "@/types/restaurant";
+import { MapPin, Search, Star, Clock, Heart, SlidersHorizontal, ChevronLeft, ChevronRight, X, AlertCircle } from "lucide-react";
 
-const formatDistance = (distanceKm?: number) => {
-  if (distanceKm === undefined) return null;
-  if (distanceKm < 1) {
-    return `${Math.round(distanceKm * 1000)}m away`;
-  }
-  return `${distanceKm.toFixed(1)}km away`;
-};
-
-const CITIES = [
-  "Mumbai", "Indore", "Bengaluru", "Delhi", "Hyderabad", 
-  "Chennai", "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Chandigarh"
-];
-
+// Wrap the main content in a Suspense boundary for useSearchParams
 export default function RestaurantsPage() {
-  const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  return (
+    <Suspense fallback={<RestaurantsLoadingFallback />}>
+      <RestaurantsContent />
+    </Suspense>
+  );
+}
+
+function RestaurantsLoadingFallback() {
+  return (
+    <div className="min-h-screen bg-brand-bg pt-24 pb-20">
+      <Container>
+        <div className="flex flex-col md:flex-row gap-6 lg:gap-8">
+          <div className="w-full md:w-64 lg:w-72 shrink-0 hidden md:block">
+            <Skeleton className="w-full h-[500px] rounded-xl" />
+          </div>
+          <div className="flex-1">
+            <Skeleton className="w-full h-12 rounded-lg mb-6" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <Skeleton key={i} className="w-full h-72 rounded-xl" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Container>
+    </div>
+  );
+}
+
+function RestaurantsContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Filters State mapped to URL params
+  const [page, setPage] = useState(Number(searchParams.get("page")) || 0);
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [city, setCity] = useState(searchParams.get("city") || "");
+  const [locality, setLocality] = useState(searchParams.get("locality") || "");
+  const [cuisine, setCuisine] = useState(searchParams.get("cuisine") || "");
+  const [minRating, setMinRating] = useState(searchParams.get("minRating") || "");
+  const [priceRange, setPriceRange] = useState(searchParams.get("priceRange") || "");
+  const [sort, setSort] = useState(searchParams.get("sort") || "rating,desc");
+  const [isNearby, setIsNearby] = useState(searchParams.get("isNearby") === "true");
+  const [lat, setLat] = useState(searchParams.get("lat") || "");
+  const [lng, setLng] = useState(searchParams.get("lng") || "");
+  const [radius, setRadius] = useState(searchParams.get("radius") || "20");
+  
+  // Location States
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [citySearch, setCitySearch] = useState("");
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [selectedCity, setSelectedCity] = useState<string>("");
+  const [locationDenied, setLocationDenied] = useState(false);
 
-  const fetchRestaurantsList = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await getRestaurants();
-      setAllRestaurants(data);
-      setRestaurants(data);
-      setSelectedCity("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load restaurants");
-    } finally {
-      setIsLoading(false);
-    }
+  useEffect(() => {
+    getCities().then(cities => setAvailableCities(cities)).catch(() => {});
   }, []);
+  
+  // Mobile filters open state
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const city = e.target.value;
-    setSelectedCity(city);
-    setLocationError(null);
-    if (city === "") {
-      setRestaurants(allRestaurants);
-    } else {
-      setRestaurants(allRestaurants.filter(r => r.city === city));
-    }
+  // Data State
+  const [data, setData] = useState<Page<Restaurant> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Sync state to URL
+  const createQueryString = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      Object.entries(updates).forEach(([name, value]) => {
+        if (value === null || value === "") {
+          params.delete(name);
+        } else {
+          params.set(name, value);
+        }
+      });
+      return params.toString();
+    },
+    [searchParams]
+  );
+
+  const updateFilters = (updates: Record<string, string | null>) => {
+    const newQueryString = createQueryString({ ...updates, page: "0" }); // Reset to page 0 on filter change
+    router.push(pathname + "?" + newQueryString, { scroll: false });
+    // Update local state immediately for fast feedback
+    if (updates.search !== undefined) setSearch(updates.search || "");
+    if (updates.city !== undefined) setCity(updates.city || "");
+    if (updates.locality !== undefined) setLocality(updates.locality || "");
+    if (updates.cuisine !== undefined) setCuisine(updates.cuisine || "");
+    if (updates.minRating !== undefined) setMinRating(updates.minRating || "");
+    if (updates.priceRange !== undefined) setPriceRange(updates.priceRange || "");
+    if (updates.sort !== undefined) setSort(updates.sort || "rating,desc");
+    if (updates.isNearby !== undefined) setIsNearby(updates.isNearby === "true");
+    if (updates.lat !== undefined) setLat(updates.lat || "");
+    if (updates.lng !== undefined) setLng(updates.lng || "");
+    if (updates.radius !== undefined) setRadius(updates.radius || "20");
+    if (updates.page !== undefined) setPage(Number(updates.page) || 0);
+    else setPage(0);
   };
 
-  const handleUseLocation = () => {
+  const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      setLocationError("Geolocation is not supported by your browser");
+      alert("Geolocation is not supported by your browser");
       return;
     }
-
     setIsLocating(true);
-    setLocationError(null);
-    setSelectedCity("");
-
+    setLocationDenied(false);
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          setIsLoading(true);
-          const { latitude, longitude } = position.coords;
-          const data = await getNearbyRestaurants(latitude, longitude, 10);
-          setRestaurants(data);
-        } catch (err) {
-          setLocationError(err instanceof Error ? err.message : "Failed to load nearby restaurants");
-        } finally {
-          setIsLocating(false);
-          setIsLoading(false);
-        }
-      },
-      (err) => {
+      (position) => {
         setIsLocating(false);
-        switch (err.code) {
-          case err.PERMISSION_DENIED:
-            setLocationError("Location permission denied");
-            break;
-          case err.POSITION_UNAVAILABLE:
-            setLocationError("Location information is unavailable");
-            break;
-          case err.TIMEOUT:
-            setLocationError("The request to get user location timed out");
-            break;
-          default:
-            setLocationError("An unknown error occurred getting location");
-            break;
-        }
+        updateFilters({
+          isNearby: "true",
+          lat: position.coords.latitude.toString(),
+          lng: position.coords.longitude.toString(),
+          radius: radius || "20",
+          city: null
+        });
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      (error) => {
+        setIsLocating(false);
+        setLocationDenied(true);
+      }
     );
+  };
+
+  const handleCitySelect = (selectedCity: string) => {
+    updateFilters({
+      city: selectedCity,
+      isNearby: null,
+      lat: null,
+      lng: null,
+      radius: null
+    });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 0 || (data && newPage >= data.totalPages)) return;
+    const newQueryString = createQueryString({ page: newPage.toString() });
+    router.push(pathname + "?" + newQueryString);
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
     let ignore = false;
-
-    async function load() {
+    async function fetchData() {
+      setLoading(true);
+      setError("");
       try {
-        const data = await getRestaurants();
-        if (!ignore) {
-          setAllRestaurants(data);
-          setRestaurants(data);
-          setIsLoading(false);
+        let responseData: Page<Restaurant>;
+        if (isNearby && lat && lng) {
+          responseData = await getNearbyRestaurants(parseFloat(lat), parseFloat(lng), parseFloat(radius || "20"), page, 16);
+        } else {
+          const params: Record<string, string> = { page: page.toString(), size: "16", sort };
+          if (search) params.search = search;
+          if (city) params.city = city;
+          if (locality) params.locality = locality;
+          if (cuisine) params.cuisine = cuisine;
+          if (minRating) params.minRating = minRating;
+          if (priceRange) params.priceRange = priceRange;
+          
+          responseData = await getRestaurants(params);
         }
-      } catch (err) {
+        
         if (!ignore) {
-          setError(err instanceof Error ? err.message : "Failed to load restaurants");
-          setIsLoading(false);
+          setData(responseData);
+          setLoading(false);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          setError((err as Error).message || "Failed to load restaurants. Please try again.");
+          setLoading(false);
         }
       }
     }
-
-    load();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    fetchData();
+    return () => { ignore = true; };
+  }, [page, search, city, locality, cuisine, minRating, priceRange, sort, isNearby, lat, lng, radius]);
 
   return (
-    <div className="flex-1 py-12 sm:py-16">
+    <div className="min-h-screen bg-brand-bg pt-24 pb-20">
       <Container>
-        {/* Page Header */}
-        <div className="mb-10 sm:mb-12">
-          <Badge variant="default" className="mb-3">
-            Handpicked & Verified
-          </Badge>
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <h1 className="text-4xl sm:text-5xl font-serif text-brand-fg tracking-tight">
-                Restaurants
-              </h1>
-              <p className="text-brand-muted text-base sm:text-lg mt-2 font-light">
-                Discover distinct dining spots offering honest, delicious food without the noise.
-              </p>
+        <div className="flex flex-col md:flex-row gap-6 lg:gap-8">
+          
+          {/* Mobile Filter Toggle & Search Header */}
+          <div className="md:hidden flex flex-col gap-4">
+            <div className="relative w-full">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+              <Input
+                placeholder="Search restaurants or cuisines..."
+                value={search}
+                onChange={(e) => updateFilters({ search: e.target.value })}
+                className="w-full pl-12 h-14 bg-white border-none shadow-sm rounded-xl text-lg font-medium"
+              />
             </div>
-            
-            <div className="flex flex-col items-start sm:items-end gap-3 shrink-0">
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <div className="relative">
-                  <select 
-                    value={selectedCity}
-                    onChange={handleCityChange}
-                    disabled={isLocating || isLoading}
-                    className="appearance-none bg-white border border-brand-border/80 text-brand-fg text-sm rounded-md px-4 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-colors cursor-pointer w-full"
+            <Button 
+              variant="outline" 
+              className="w-full justify-between bg-white"
+              onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+            >
+              <span className="flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Filters & Sort</span>
+              {mobileFiltersOpen ? <X className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </Button>
+          </div>
+
+          {/* Desktop Filters Sidebar / Mobile Expandable Filters */}
+          <div className={`w-full md:w-64 lg:w-72 shrink-0 ${mobileFiltersOpen ? 'block' : 'hidden md:block'}`}>
+            <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24 space-y-8">
+              
+              <div className="hidden md:block relative w-full mb-6">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                <Input
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => updateFilters({ search: e.target.value })}
+                  className="w-full pl-10 h-10 bg-stone-50 border-stone-200"
+                />
+              </div>
+
+              {/* Sort By */}
+              <div>
+                <h3 className="font-bold text-stone-800 mb-3 flex items-center gap-2">Sort By</h3>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { label: "Rating (High to Low)", value: "rating,desc" },
+                    { label: "Delivery Time (Fastest)", value: "deliveryTimeMinutes,asc" },
+                    { label: "A to Z", value: "name,asc" },
+                  ].map(option => (
+                    <label key={option.value} className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="sort" 
+                        className="w-4 h-4 text-brand-primary border-stone-300 focus:ring-brand-primary"
+                        checked={sort === option.value}
+                        onChange={() => updateFilters({ sort: option.value })}
+                      />
+                      <span className="text-stone-600 group-hover:text-stone-900 transition-colors">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <hr className="border-stone-100" />
+
+              {/* Location */}
+              <div className="space-y-4">
+                <h3 className="font-bold text-stone-800 flex items-center gap-2">Location</h3>
+                
+                {/* Select City Dropdown */}
+                <div className="relative w-full">
+                  <Button 
+                    variant="outline"
+                    className="w-full h-10 justify-start px-3 text-left font-medium text-sm bg-stone-50 border-stone-200"
+                    onClick={() => setCityDropdownOpen(!cityDropdownOpen)}
                   >
-                    <option value="">All Locations</option>
-                    {CITIES.map(city => (
-                      <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-muted">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                    <MapPin className="w-4 h-4 text-stone-400 mr-2 shrink-0" />
+                    <span className="truncate flex-1">{(!isNearby && city) ? city : "Select City..."}</span>
+                  </Button>
+                  
+                  {cityDropdownOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-full bg-white border border-stone-100 rounded-xl shadow-lg z-50 overflow-hidden">
+                      <div className="p-2 border-b border-stone-100 bg-stone-50/50">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+                          <input 
+                            type="text" 
+                            placeholder="Search..." 
+                            className="w-full pl-8 pr-2 py-1.5 bg-white border border-stone-200 rounded-md text-sm focus:outline-none focus:border-brand-primary"
+                            value={citySearch}
+                            onChange={(e) => setCitySearch(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1">
+                        {availableCities.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())).length === 0 ? (
+                          <div className="p-3 text-center text-xs text-stone-500">No cities found</div>
+                        ) : (
+                          availableCities.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())).map(c => (
+                            <button
+                              key={c}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-stone-50 rounded-md transition-colors text-stone-700 font-medium"
+                              onClick={() => {
+                                handleCitySelect(c);
+                                setCityDropdownOpen(false);
+                                setCitySearch("");
+                              }}
+                            >
+                              {c}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
+                {/* Locality Input */}
+                <Input 
+                  placeholder="Locality (e.g. Andheri)" 
+                  value={locality}
+                  onChange={(e) => updateFilters({ locality: e.target.value })}
+                  className="h-10 text-sm"
+                  disabled={isNearby}
+                />
+
+                {/* OR divider */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-px bg-stone-100"></div>
+                  <span className="text-xs font-medium text-stone-400">OR</span>
+                  <div className="flex-1 h-px bg-stone-100"></div>
+                </div>
+
+                {/* Use My Location Button */}
                 <Button 
-                  onClick={handleUseLocation} 
-                  variant="outline" 
+                  onClick={handleUseMyLocation} 
+                  variant={isNearby ? "primary" : "outline"} 
+                  className="w-full h-10 flex items-center justify-center gap-2 text-sm bg-white"
                   disabled={isLocating}
-                  className="flex items-center gap-2 justify-center"
                 >
-                  {isLocating ? (
-                    <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin opacity-70" />
-                  ) : (
-                    <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                  {isLocating ? "Locating..." : "Use my location"}
+                  <Navigation className={`w-4 h-4 ${isLocating ? 'animate-pulse' : ''}`} />
+                  {isLocating ? "Detecting..." : (isNearby ? "Using your location" : "Use My Location")}
                 </Button>
-              </div>
-              
-              {!isLoading && !error && (
-                <span className="text-sm font-medium text-brand-muted">
-                  Showing {restaurants.length} {restaurants.length === 1 ? "restaurant" : "restaurants"}
-                  {selectedCity && ` in ${selectedCity}`}
-                  {!selectedCity && restaurants[0]?.distanceKm !== undefined && " nearby"}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {locationError && (
-            <div className="mt-4 p-3 bg-rose-50 border border-rose-100 rounded-md text-sm text-rose-600 flex items-center gap-2 max-w-2xl">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              {locationError}
-            </div>
-          )}
-        </div>
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3, 4, 5, 6].map((idx) => (
-              <Card key={idx} noPadding className="overflow-hidden animate-pulse">
-                <div className="h-48 bg-brand-border/40" />
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div className="h-6 w-3/5 bg-brand-border/60 rounded" />
-                    <div className="h-5 w-12 bg-brand-border/60 rounded" />
+                
+                {isNearby && (
+                  <div className="flex items-center justify-between gap-2 text-sm mt-2">
+                    <span className="text-stone-600 font-medium">Radius:</span>
+                    <select 
+                      className="h-8 px-2 bg-stone-50 border border-stone-200 rounded-md focus:outline-none"
+                      value={radius}
+                      onChange={(e) => updateFilters({ radius: e.target.value })}
+                    >
+                      <option value="5">5 km</option>
+                      <option value="10">10 km</option>
+                      <option value="20">20 km</option>
+                      <option value="30">30 km</option>
+                    </select>
                   </div>
-                  <div className="h-4 w-4/5 bg-brand-border/40 rounded" />
-                  <div className="flex gap-4 pt-2">
-                    <div className="h-4 w-20 bg-brand-border/40 rounded" />
-                    <div className="h-4 w-24 bg-brand-border/40 rounded" />
+                )}
+                
+                {locationDenied && (
+                  <div className="text-red-500 text-xs font-medium text-center">
+                    Location permission denied.
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Error State */}
-        {!isLoading && error && (
-          <div className="max-w-xl mx-auto my-12 text-center">
-            <Card className="p-8 border-rose-200 bg-white shadow-sm">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-rose-50 flex items-center justify-center text-rose-600">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                )}
               </div>
-              <h2 className="text-2xl font-serif text-brand-fg mb-2">Unable to Load Restaurants</h2>
-              <p className="text-brand-muted text-sm mb-6">{error}</p>
-              <Button onClick={fetchRestaurantsList} variant="primary">
-                Try Again
-              </Button>
-            </Card>
-          </div>
-        )}
 
-        {/* Empty State */}
-        {!isLoading && !error && restaurants.length === 0 && (
-          <div className="max-w-md mx-auto my-12 text-center">
-            <Card className="p-8 bg-white">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-brand-bg flex items-center justify-center text-brand-muted">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-serif text-brand-fg mb-2">No Restaurants Found</h2>
-              <p className="text-brand-muted text-sm mb-6">
-                There are currently no dining partners available. Please check back shortly.
-              </p>
-              <Button onClick={fetchRestaurantsList} variant="outline">
-                Refresh
-              </Button>
-            </Card>
-          </div>
-        )}
 
-        {/* Populated State */}
-        {!isLoading && !error && restaurants.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {restaurants.map((restaurant, index) => (
-              <Link
-                key={restaurant.id}
-                href={`/restaurants/${restaurant.id}`}
-                className="block group"
-              >
-                <Card
-                  noPadding
-                  className="h-full hover:border-brand-primary/40 hover:shadow-sm transition-all duration-200"
-                >
-                  <div className="h-44 bg-stone-100 relative flex items-center justify-center overflow-hidden border-b border-brand-border/60 group-hover:opacity-90 transition-opacity">
-                    <ImageWithFallback
-                      src={restaurant.coverImageUrl}
-                      alt={restaurant.name}
-                      priority={index < 6}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      fallbackNode={
-                        <>
-                          <div className="absolute inset-0 bg-gradient-to-t from-stone-900/10 to-transparent" />
-                          <span className="font-serif text-3xl font-semibold text-stone-300 select-none group-hover:scale-105 transition-transform duration-300">
-                            {restaurant.name.charAt(0)}
-                          </span>
-                        </>
-                      }
+              <hr className="border-stone-100" />
+
+              {/* Cuisine */}
+              <div>
+                <h3 className="font-bold text-stone-800 mb-3 flex items-center gap-2">Popular Cuisines</h3>
+                <div className="flex flex-col gap-2">
+                  {["North Indian", "South Indian", "Chinese", "Biryani", "Desserts", "Beverages"].map(c => (
+                    <label key={c} className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="cuisine"
+                        className="w-4 h-4 text-brand-primary border-stone-300 focus:ring-brand-primary"
+                        checked={cuisine === c}
+                        onChange={() => updateFilters({ cuisine: c })}
+                      />
+                      <span className="text-stone-600 group-hover:text-stone-900 transition-colors">{c}</span>
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-3 cursor-pointer group mt-2">
+                    <input 
+                      type="radio" 
+                      name="cuisine"
+                      className="w-4 h-4 text-brand-primary border-stone-300 focus:ring-brand-primary"
+                      checked={cuisine === ""}
+                      onChange={() => updateFilters({ cuisine: null })}
                     />
-                    <div className="absolute top-4 left-4">
-                      <Badge variant="default" className="bg-white/90 backdrop-blur-sm shadow-xs">
-                        {restaurant.cuisine}
-                      </Badge>
-                    </div>
-                  </div>
+                    <span className="text-stone-500 italic">Clear Cuisine</span>
+                  </label>
+                </div>
+              </div>
 
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start gap-2 mb-2">
-                      <h3 className="font-serif text-xl font-medium text-brand-fg group-hover:text-brand-primary transition-colors">
-                        {restaurant.name}
-                      </h3>
-                      <span className="flex items-center text-sm font-medium bg-brand-bg px-2.5 py-1 rounded-md border border-brand-border shrink-0">
-                        <svg className="w-3.5 h-3.5 text-amber-500 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        {restaurant.rating.toFixed(1)}
-                      </span>
-                    </div>
+              <hr className="border-stone-100" />
 
-                    <div className="flex items-center justify-between text-sm text-brand-muted mb-6">
-                      <div className="flex items-center min-w-0 pr-2">
-                        <svg className="w-4 h-4 mr-1 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span className="truncate">{restaurant.location}</span>
-                      </div>
-                      
-                      {restaurant.distanceKm !== undefined && (
-                        <span className="shrink-0 font-medium text-brand-primary bg-brand-primary/5 px-2 py-0.5 rounded text-xs border border-brand-primary/10">
-                          {formatDistance(restaurant.distanceKm)}
-                        </span>
-                      )}
-                    </div>
+              {/* Rating */}
+              <div>
+                <h3 className="font-bold text-stone-800 mb-3 flex items-center gap-2">Rating</h3>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { label: "4.5 & Above", value: "4.5" },
+                    { label: "4.0 & Above", value: "4.0" },
+                    { label: "3.0 & Above", value: "3.0" },
+                    { label: "Any Rating", value: "" },
+                  ].map(r => (
+                    <label key={r.label} className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="rating"
+                        className="w-4 h-4 text-brand-primary border-stone-300 focus:ring-brand-primary"
+                        checked={minRating === r.value}
+                        onChange={() => updateFilters({ minRating: r.value || null })}
+                      />
+                      <span className="text-stone-600 group-hover:text-stone-900 transition-colors">{r.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <hr className="border-stone-100" />
 
-                    <div className="pt-4 border-t border-brand-border/60 flex items-center justify-between text-xs text-brand-muted">
-                      <span>{restaurant.cuisine} cuisine</span>
-                      <span className="font-medium text-brand-fg group-hover:text-brand-primary flex items-center transition-colors">
-                        View menu
-                        <svg className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+              {/* Price */}
+              <div>
+                <h3 className="font-bold text-stone-800 mb-3 flex items-center gap-2">Price</h3>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { label: "₹ (Budget)", value: "1" },
+                    { label: "₹₹ (Mid-range)", value: "2" },
+                    { label: "₹₹₹ (Premium)", value: "3" },
+                    { label: "Any Price", value: "" },
+                  ].map(p => (
+                    <label key={p.label} className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="price"
+                        className="w-4 h-4 text-brand-primary border-stone-300 focus:ring-brand-primary"
+                        checked={priceRange === p.value}
+                        onChange={() => updateFilters({ priceRange: p.value || null })}
+                      />
+                      <span className="text-stone-600 group-hover:text-stone-900 transition-colors">{p.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reset All */}
+              <Button 
+                variant="outline" 
+                className="w-full mt-4"
+                onClick={() => router.push(pathname)}
+              >
+                Reset All Filters
+              </Button>
+
+            </div>
           </div>
-        )}
+          {/* Main Content Area */}
+          <div className="flex-1">
+            <div className="mb-6 flex justify-between items-end">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-stone-900 mb-2">
+                  {search ? `Search results for "${search}"` : (city ? `Restaurants in ${city}` : "All Restaurants")}
+                </h1>
+                <p className="text-stone-500 font-medium">
+                  {data ? `${data.totalElements} results found` : "Loading..."}
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-xl flex flex-col items-center justify-center text-center">
+                <AlertCircle className="w-10 h-10 mb-3 text-red-400" />
+                <h3 className="font-bold text-lg mb-1">Oops! Something went wrong</h3>
+                <p className="mb-4">{error}</p>
+                <Button onClick={() => window.location.reload()} variant="primary">Try Again</Button>
+              </div>
+            )}
+
+            {loading && !error && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="flex flex-col gap-3">
+                    <Skeleton className="w-full h-48 rounded-2xl" />
+                    <Skeleton className="w-3/4 h-6 rounded" />
+                    <Skeleton className="w-1/2 h-4 rounded" />
+                    <Skeleton className="w-1/4 h-4 rounded" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!loading && !error && data && data.content.length === 0 && (
+              <div className="bg-white border border-stone-100 rounded-2xl p-12 flex flex-col items-center justify-center text-center shadow-sm">
+                <div className="w-20 h-20 bg-stone-50 rounded-full flex items-center justify-center mb-4">
+                  <Search className="w-10 h-10 text-stone-300" />
+                </div>
+                <h3 className="text-xl font-bold text-stone-800 mb-2">{isNearby ? 'No restaurants found nearby' : 'No restaurants found'}</h3>
+                <p className="text-stone-500 max-w-md mx-auto mb-6">
+                  We couldn&apos;t find any restaurants matching your current filters. Try adjusting your search or location.
+                </p>
+                <Button onClick={() => router.push(pathname)} variant="outline">Clear All Filters</Button>
+              </div>
+            )}
+
+            {!loading && !error && data && data.content.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {data.content.map((restaurant) => (
+                    <Link href={`/restaurants/${restaurant.id}`} key={restaurant.id} className="group block h-full">
+                      <Card noPadding className="h-full flex flex-col border-none shadow-card hover:shadow-hover transition-all bg-white relative top-0 group-hover:-top-2 rounded-2xl overflow-hidden">
+                        
+                        {/* Image Container (Responsive Mobile horizontal, Desktop vertical) */}
+                        <div className="relative h-48 w-full shrink-0 bg-stone-100 overflow-hidden">
+                          <ImageWithFallback
+                            src={restaurant.coverImageUrl || ""}
+                            alt={restaurant.name}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          {(restaurant as Restaurant & { distanceKm?: number }).distanceKm && (
+                            <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-stone-800 px-2 py-1 rounded-md text-xs font-bold shadow-sm flex items-center gap-1">
+                              <MapPin className="w-3 h-3" /> {((restaurant as Restaurant & { distanceKm?: number }).distanceKm)?.toFixed(1)} km
+                            </div>
+                          )}
+                          <div className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold shadow-sm flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-stone-600" /> {restaurant.deliveryTimeMinutes || 30} mins
+                          </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-start mb-1">
+                              <h3 className="font-extrabold text-stone-900 text-lg leading-tight line-clamp-1 group-hover:text-brand-primary transition-colors">
+                                {restaurant.name}
+                              </h3>
+                              <div className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-0.5 rounded text-sm font-bold shrink-0">
+                                <Star className="w-3 h-3 fill-current" /> {restaurant.rating.toFixed(1)}
+                              </div>
+                            </div>
+                            <p className="text-stone-500 text-sm font-medium line-clamp-1 mb-2">
+                              {restaurant.cuisine}
+                            </p>
+                          </div>
+                          
+                          <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-stone-100">
+                            <div className="flex items-center justify-between text-xs text-stone-500">
+                              <span className="flex items-center gap-1.5 truncate">
+                                <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                                <span className="truncate">{restaurant.location}, {restaurant.city}</span>
+                              </span>
+                              <span className="font-medium bg-stone-100 px-2 py-1 rounded-md text-stone-600">
+                                {restaurant.priceRange === 2 ? "₹₹" : (restaurant.priceRange === 3 ? "₹₹₹" : "₹")}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+
+                {/* Pagination Control */}
+                {data.totalPages > 1 && (
+                  <div className="mt-12 flex justify-center items-center gap-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handlePageChange(data.number - 1)}
+                      disabled={data.number === 0}
+                      className="bg-white"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-2" /> Previous
+                    </Button>
+                    <div className="text-sm font-bold text-stone-600 bg-white px-4 py-2 rounded-lg shadow-sm border border-stone-100">
+                      Page {data.number + 1} of {data.totalPages}
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handlePageChange(data.number + 1)}
+                      disabled={data.number >= data.totalPages - 1}
+                      className="bg-white"
+                    >
+                      Next <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </Container>
     </div>
   );

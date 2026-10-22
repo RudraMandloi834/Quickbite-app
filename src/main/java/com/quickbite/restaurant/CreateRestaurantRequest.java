@@ -2,6 +2,10 @@ package com.quickbite.restaurant;
 
 public record CreateRestaurantRequest(
         String name,
+        String phone,
+        String email,
+        String openingTime,
+        String closingTime,
         String cuisine,
         String location,
         Double rating,

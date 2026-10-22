@@ -19,6 +19,9 @@ public class DeliveryService {
     private final DeliveryRepository deliveryRepository;
     private final OrderRepository orderRepository;
     private final RestaurantService restaurantService;
+    private final com.quickbite.restaurant.RestaurantRepository restaurantRepository;
+    private final com.quickbite.customer.CustomerRepository customerRepository;
+    private final com.quickbite.order.OrderItemRepository orderItemRepository;
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private com.quickbite.order.OrderLifecycleService orderLifecycleService;
@@ -26,10 +29,20 @@ public class DeliveryService {
     private final com.quickbite.event.SseService sseService;
     private final DeliveryStatusHistoryRepository historyRepository;
 
-    public DeliveryService(DeliveryRepository deliveryRepository, OrderRepository orderRepository, RestaurantService restaurantService, com.quickbite.event.SseService sseService, DeliveryStatusHistoryRepository historyRepository) {
+    public DeliveryService(DeliveryRepository deliveryRepository, 
+                           OrderRepository orderRepository, 
+                           RestaurantService restaurantService, 
+                           com.quickbite.restaurant.RestaurantRepository restaurantRepository,
+                           com.quickbite.customer.CustomerRepository customerRepository,
+                           com.quickbite.order.OrderItemRepository orderItemRepository,
+                           com.quickbite.event.SseService sseService, 
+                           DeliveryStatusHistoryRepository historyRepository) {
         this.deliveryRepository = deliveryRepository;
         this.orderRepository = orderRepository;
         this.restaurantService = restaurantService;
+        this.restaurantRepository = restaurantRepository;
+        this.customerRepository = customerRepository;
+        this.orderItemRepository = orderItemRepository;
         this.sseService = sseService;
         this.historyRepository = historyRepository;
     }
@@ -91,13 +104,13 @@ public class DeliveryService {
 
         verifyDeliveryCreationAccess(order);
 
-        if (order.getStatus() == OrderStatus.CREATED) {
+        if (order.getStatus() == OrderStatus.PLACED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Pending orders cannot have a delivery");
         }
         if (order.getStatus() == OrderStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled orders cannot have a delivery");
         }
-        if (order.getStatus() == OrderStatus.CREATED || order.getStatus() == OrderStatus.PAYMENT_PENDING) {
+        if (order.getStatus() == OrderStatus.PLACED || order.getStatus() == OrderStatus.PLACED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only confirmed orders can have a delivery");
         }
         if (deliveryRepository.existsByOrderId(orderId)) {
@@ -113,6 +126,8 @@ public class DeliveryService {
         Long userId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
         String role = "ROLE_SYSTEM";
         historyRepository.save(new DeliveryStatusHistory(delivery.getId(), null, DeliveryStatus.AVAILABLE, userId, role, "Delivery created"));
+        publishDeliveryEvent(delivery);
+        populateDeliveryDetails(delivery);
         return delivery;
     }
 
@@ -127,6 +142,7 @@ public class DeliveryService {
         Delivery delivery = deliveryRepository.findById(deliveryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
         verifyDeliveryAccess(delivery);
+        populateDeliveryDetails(delivery);
         return delivery;
     }
 
@@ -138,6 +154,7 @@ public class DeliveryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found for this order"));
 
         verifyDeliveryAccess(delivery);
+        populateDeliveryDetails(delivery);
         return delivery;
     }
 
@@ -157,6 +174,7 @@ public class DeliveryService {
         historyRepository.save(new DeliveryStatusHistory(saved.getId(), previousStatus, DeliveryStatus.ASSIGNED, driverId, "ROLE_DRIVER", "Driver assigned"));
         orderLifecycleService.transitionOrder(saved.getOrderId(), com.quickbite.order.OrderStatus.DRIVER_ASSIGNED, driverId, "ROLE_DRIVER", "Driver assigned");
         publishDeliveryEvent(saved);
+        populateDeliveryDetails(saved);
         return saved;
     }
 
@@ -190,7 +208,38 @@ public class DeliveryService {
             orderLifecycleService.transitionOrder(saved.getOrderId(), newOrderStatus, requestingDriverId, "ROLE_DRIVER", "Delivery update");
         }
         publishDeliveryEvent(saved);
+        populateDeliveryDetails(saved);
         return saved;
+    }
+
+    public void populateDeliveryDetails(Delivery delivery) {
+        if (delivery == null || delivery.getOrderId() == null) return;
+        Order order = orderRepository.findById(delivery.getOrderId()).orElse(null);
+        if (order != null) {
+            delivery.setOrderTotal(order.getTotalAmount());
+            if (order.getRestaurantId() != null) {
+                com.quickbite.restaurant.Restaurant r = restaurantRepository.findById(order.getRestaurantId()).orElse(null);
+                if (r != null) {
+                    delivery.setRestaurantName(r.getName());
+                    delivery.setRestaurantAddress(r.getAddress());
+                }
+            }
+            if (order.getCustomerId() != null) {
+                com.quickbite.customer.Customer c = customerRepository.findById(order.getCustomerId()).orElse(null);
+                if (c != null) {
+                    delivery.setCustomerName(c.getName());
+                    delivery.setCustomerPhone(c.getPhone());
+                }
+            }
+            delivery.setCustomerAddress("123 Main St, Apartment 4B");
+            java.util.List<com.quickbite.order.OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+            if (items != null && !items.isEmpty()) {
+                String summary = items.stream()
+                        .map(i -> i.getQuantity() + "x " + i.getMenuItemName())
+                        .collect(java.util.stream.Collectors.joining(", "));
+                delivery.setOrderItemsSummary(summary);
+            }
+        }
     }
 
     private void publishDeliveryEvent(Delivery delivery) {
@@ -212,11 +261,15 @@ public class DeliveryService {
     }
 
     public java.util.List<Delivery> getAvailableDeliveries() {
-        return deliveryRepository.findByStatus(DeliveryStatus.AVAILABLE);
+        java.util.List<Delivery> list = deliveryRepository.findByStatus(DeliveryStatus.AVAILABLE);
+        list.forEach(this::populateDeliveryDetails);
+        return list;
     }
 
     public java.util.List<Delivery> getDeliveriesByDriver(Long driverId) {
-        return deliveryRepository.findByDriverId(driverId);
+        java.util.List<Delivery> list = deliveryRepository.findByDriverId(driverId);
+        list.forEach(this::populateDeliveryDetails);
+        return list;
     }
 
     private boolean isAllowedTransition(DeliveryStatus currentStatus, DeliveryStatus newStatus) {

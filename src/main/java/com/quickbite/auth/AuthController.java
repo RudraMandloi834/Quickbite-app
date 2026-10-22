@@ -60,7 +60,7 @@ public class AuthController {
             role = "ROLE_" + role.toUpperCase();
         }
         
-        if (!role.equals("ROLE_CUSTOMER") && !role.equals("ROLE_RESTAURANT_PARTNER") && !role.equals("ROLE_DRIVER")) {
+        if (!role.equals("ROLE_CUSTOMER") && !role.equals("ROLE_RESTAURANT_PARTNER") && !role.equals("ROLE_DRIVER") && !role.equals("ROLE_OPERATOR")) {
             role = "ROLE_CUSTOMER"; // Fallback to safe role
         }
 

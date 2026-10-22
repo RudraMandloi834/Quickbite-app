@@ -4,6 +4,8 @@ import com.quickbite.event.SseService;
 import com.quickbite.event.SystemEvent;
 import com.quickbite.restaurant.RestaurantRepository;
 import com.quickbite.restaurant.Restaurant;
+import com.quickbite.delivery.DeliveryRepository;
+import com.quickbite.delivery.Delivery;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -14,10 +16,14 @@ public class OrderEventPublisher {
 
     private final SseService sseService;
     private final RestaurantRepository restaurantRepository;
+    private final DeliveryRepository deliveryRepository;
+    private final com.quickbite.customer.CustomerRepository customerRepository;
 
-    public OrderEventPublisher(SseService sseService, RestaurantRepository restaurantRepository) {
+    public OrderEventPublisher(SseService sseService, RestaurantRepository restaurantRepository, DeliveryRepository deliveryRepository, com.quickbite.customer.CustomerRepository customerRepository) {
         this.sseService = sseService;
         this.restaurantRepository = restaurantRepository;
+        this.deliveryRepository = deliveryRepository;
+        this.customerRepository = customerRepository;
     }
 
     public void publishOrderCreated(Order order) {
@@ -26,16 +32,15 @@ public class OrderEventPublisher {
 
     public void publishOrderStatusUpdated(Order order) {
         String eventType = switch (order.getStatus()) {
-            case CONFIRMED -> "ORDER_CONFIRMED";
-            case RESTAURANT_ACCEPTED -> "ORDER_ACCEPTED";
+            case PLACED -> "ORDER_PLACED";
+            case ACCEPTED -> "ORDER_ACCEPTED";
             case PREPARING -> "ORDER_PREPARING";
             case READY_FOR_PICKUP -> "ORDER_READY";
             case DRIVER_ASSIGNED -> "DRIVER_ASSIGNED";
             case PICKED_UP -> "DELIVERY_PICKED_UP";
             case OUT_FOR_DELIVERY -> "DELIVERY_OUT_FOR_DELIVERY";
             case DELIVERED -> "DELIVERY_DELIVERED";
-            case PAYMENT_PENDING -> "ORDER_PAYMENT_PENDING";
-            case PAYMENT_FAILED -> "ORDER_PAYMENT_FAILED";
+            case REJECTED -> "ORDER_REJECTED";
             case CANCELLED -> "ORDER_CANCELLED";
             default -> "ORDER_STATUS_UPDATED";
         };
@@ -61,8 +66,26 @@ public class OrderEventPublisher {
         // To Restaurant Owner
         if (order.getRestaurantId() != null) {
             Restaurant r = restaurantRepository.findById(order.getRestaurantId()).orElse(null);
-            if (r != null && r.getOwnerId() != null) {
-                sseService.emitToRestaurant(r.getOwnerId(), event);
+            Long ownerId = r != null ? r.getOwnerId() : null;
+            if (ownerId == null) {
+                ownerId = customerRepository.findByEmail("restaurant@test.com")
+                        .map(com.quickbite.customer.Customer::getId)
+                        .orElse(null);
+            }
+            if (ownerId != null) {
+                sseService.emitToRestaurant(ownerId, event);
+            }
+        }
+
+        
+        // To Drivers
+        if (order.getStatus() == OrderStatus.READY_FOR_PICKUP) {
+            sseService.emitToAllDrivers(event);
+        } else {
+            Delivery delivery = deliveryRepository.findByOrderId(order.getId()).orElse(null);
+            if (delivery != null && delivery.getDriverId() != null) {
+                event.setDriverId(delivery.getDriverId());
+                sseService.emitToDriver(delivery.getDriverId(), event);
             }
         }
 

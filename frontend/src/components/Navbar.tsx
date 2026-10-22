@@ -79,7 +79,6 @@ function PartnerDropdown() {
         >
           <Link href="/restaurant/dashboard" className="block px-4 py-2 hover:bg-gray-100 text-brand-fg">Partner Dashboard</Link>
           <Link href="/restaurant/register" className="block px-4 py-2 hover:bg-gray-100 text-brand-fg">Register Restaurant</Link>
-          <Link href="/restaurant/join" className="block px-4 py-2 hover:bg-gray-100 text-brand-fg">Join Restaurant</Link>
         </div>
       )}
     </div>
@@ -103,23 +102,20 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-brand-border bg-brand-bg/80 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between">
-        <Link href="/" className="font-serif text-2xl font-semibold tracking-tight text-brand-fg">
+        <Link href="/" className="font-sans font-bold text-2xl font-semibold tracking-tight text-brand-fg">
           QuickBite<span className="text-brand-primary">.</span>
         </Link>
         
         <nav className="hidden md:flex gap-8 text-sm font-medium text-brand-muted items-center">
           {isOperator && (
             <>
-              <Link href="/admin/dashboard" className="hover:text-brand-fg font-semibold text-purple-600">Admin Dashboard</Link>
-              <Link href="/operator/restaurants" className="hover:text-brand-fg">Restaurant Approvals</Link>
-              <Link href="/admin/dashboard" className="hover:text-brand-fg">All Restaurants</Link>
-              <Link href="/admin/dashboard" className="hover:text-brand-fg">All Orders</Link>
+              <Link href="/admin/dashboard" className="hover:text-brand-fg font-semibold text-brand-secondary">Admin Dashboard</Link>
             </>
           )}
 
           {isDriver && (
             <>
-              <Link href="/driver" className="hover:text-brand-fg font-semibold text-amber-600">Driver Dashboard</Link>
+              <Link href="/driver" className="hover:text-brand-fg font-semibold text-brand-secondary">Driver Dashboard</Link>
               <Link href="/driver" className="hover:text-brand-fg">My Deliveries</Link>
             </>
           )}

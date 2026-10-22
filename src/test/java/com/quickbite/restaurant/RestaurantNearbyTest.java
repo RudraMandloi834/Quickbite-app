@@ -25,7 +25,7 @@ public class RestaurantNearbyTest {
                 .param("longitude", "72.8777")
                 .param("radiusKm", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.content").isArray());
     }
 
     @Test

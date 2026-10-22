@@ -8,7 +8,7 @@ interface CardProps {
 
 export function Card({ children, className = "", noPadding = false }: CardProps) {
   return (
-    <div className={`overflow-hidden rounded-xl bg-brand-card border border-brand-border ${noPadding ? "" : "p-6"} ${className}`}>
+    <div className={`overflow-hidden rounded-2xl bg-brand-card shadow-card hover:shadow-soft transition-shadow border border-brand-border/40 ${noPadding ? "" : "p-6"} ${className}`}>
       {children}
     </div>
   );
@@ -19,7 +19,7 @@ export function CardHeader({ children, className = "" }: { children: ReactNode; 
 }
 
 export function CardTitle({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <h3 className={`font-serif text-xl font-semibold leading-none tracking-tight ${className}`}>{children}</h3>;
+  return <h3 className={`font-sans text-xl font-bold leading-none tracking-tight text-brand-fg ${className}`}>{children}</h3>;
 }
 
 export function CardContent({ children, className = "" }: { children: ReactNode; className?: string }) {

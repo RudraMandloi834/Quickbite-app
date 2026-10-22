@@ -1,4 +1,3 @@
-/* eslint-disable */
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -9,82 +8,60 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Cart, CartDisplay } from "@/types/cart";
 import { RazorpayOptions } from "@/types/razorpay";
-import {
-  getCart,
-  createOrderFromCart,
-  createRazorpayOrder,
-  verifyPayment,
-} from "@/lib/api";
-import {
-  getStoredCartId,
-  fetchCartDisplay,
-  clearStoredCartId,
-} from "@/lib/cart";
+import { getCart, createOrderFromCart, createRazorpayOrder, verifyPayment } from "@/lib/api";
+import { getStoredCartId, fetchCartDisplay, clearStoredCartId } from "@/lib/cart";
 import { loadRazorpay } from "@/lib/razorpay";
 import { useAuth } from "@/context/AuthContext";
+import { ArrowLeft, MapPin, CreditCard, Clock, ChevronRight, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { user, loading, requireAuth } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [rawCart, setRawCart] = useState<Cart | null>(null);
   const [cartDisplay, setCartDisplay] = useState<CartDisplay | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
-  const [error, setError] = useState<string | null>(null);
+  
+  const [paymentErrorReason, setPaymentErrorReason] = useState<string | null>("");
+  const [address, setAddress] = useState("Home - 123 Main St, Apartment 4B");
+  const [paymentMethod, setPaymentMethod] = useState("card");
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
-  const [paymentFailed, setPaymentFailed] = useState(false);
-  const [paymentErrorReason, setPaymentErrorReason] = useState<string | null>(null);
-
 
   useEffect(() => {
     let ignore = false;
-    if (loading) return;
-    if (!user) {
-      requireAuth(() => {});
-      return;
-    }
-    const fetchIt = async () => {
-      setIsLoading(true);
-      setError(null);
-      const cartId = getStoredCartId();
-      if (!cartId) {
-        if (!ignore) {
-          setRawCart(null);
-          setCartDisplay(null);
-          setIsLoading(false);
-        }
+    async function loadCart() {
+      if (authLoading) return;
+      if (!user) {
+        if (!ignore) router.push("/login?redirect=/checkout");
         return;
       }
-
       try {
-        const [cartData, displayData] = await Promise.all([
-          getCart(cartId).catch(() => null),
-          fetchCartDisplay(cartId),
-        ]);
-
+        const cid = getStoredCartId();
+        if (!cid) {
+          setIsLoading(false);
+          return;
+        }
+        const display = await fetchCartDisplay(cid);
+        const raw = await getCart(cid);
         if (!ignore) {
-          if (cartData && displayData && displayData.items.length > 0) {
-            setRawCart(cartData);
-            setCartDisplay(displayData);
-          } else {
-            setRawCart(null);
-            setCartDisplay(null);
-          }
+          setCartDisplay(display);
+          setRawCart(raw);
           setIsLoading(false);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (!ignore) {
-          setError(err instanceof Error ? err.message : "Failed to load checkout details");
+          setError((err as Error).message || "Failed to load checkout details");
           setIsLoading(false);
         }
       }
-    };
-    fetchIt();
+    }
+    loadCart();
     return () => { ignore = true; };
-  }, []);
+  }, [user, authLoading, router]);
 
   const handlePlaceOrder = async () => {
     if (isSubmittingRef.current) return;
@@ -96,20 +73,18 @@ export default function CheckoutPage() {
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
-    setPaymentFailed(false);
     setPaymentErrorReason(null);
 
     try {
       const res = await loadRazorpay();
 
-      if (!res || typeof (window as any).Razorpay !== "function") {
+      if (!res || typeof (window as unknown as { Razorpay?: Function }).Razorpay !== "function") {
         setError("Razorpay SDK failed to load. Are you online? If you have an adblocker, try disabling it for this page.");
         setIsSubmitting(false);
         isSubmittingRef.current = false;
         return;
       }
 
-      // 1. Create order OR reuse existing
       let orderIdToPay = pendingOrderId;
       if (!orderIdToPay) {
         const order = await createOrderFromCart(rawCart.id);
@@ -117,16 +92,15 @@ export default function CheckoutPage() {
         setPendingOrderId(order.id);
       }
 
-      // 2. Initiate Razorpay Payment
       const initResponse = await createRazorpayOrder(orderIdToPay);
 
-      // 3. Open Razorpay Checkout
       if (initResponse.razorpayKeyId === "dummy-key-id" || initResponse.razorpayKeyId.includes("dev")) {
         await verifyPayment({
           razorpayPaymentId: "dev_success",
           razorpayOrderId: initResponse.razorpayOrderId,
           razorpaySignature: "dev_signature",
         });
+        clearStoredCartId();
         router.push(`/orders/${orderIdToPay}?success=true`);
         return;
       }
@@ -140,286 +114,227 @@ export default function CheckoutPage() {
         order_id: initResponse.razorpayOrderId,
         handler: async function (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) {
           try {
-            // 4. Verify payment on our backend
             await verifyPayment({
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
-
-            // 5. Success -> Clear cart and redirect
             clearStoredCartId();
             router.push(`/orders/${orderIdToPay}?success=true`);
-          } catch (verifyErr) {
-            console.error("Payment verification failed:", verifyErr);
-            setPaymentFailed(true);
-            setPaymentErrorReason("Payment verification failed. Please contact support.");
+          } catch (err: unknown) {
+            setPaymentErrorReason((err as Error).message || "Payment verification failed on the server.");
             setIsSubmitting(false);
             isSubmittingRef.current = false;
           }
         },
         modal: {
           ondismiss: function () {
+            setPaymentErrorReason("Payment was cancelled or modal was closed.");
             setIsSubmitting(false);
             isSubmittingRef.current = false;
-          }
+          },
         },
-        prefill: {
-          name: "",
-          email: user?.sub || "",
-          contact: "",
-        },
-        theme: {
-          color: "#0f172a", // brand-fg
-        },
+        theme: { color: "#F97316" },
       };
 
-      // Handle Razorpay explicit failures (like test mode failures)
-      const rzp = new (window as any).Razorpay(options);
-      rzp.on('payment.failed', function (response: any) {
-         setPaymentFailed(true);
-         setPaymentErrorReason(response.error.description || "Payment failed");
-         setIsSubmitting(false);
-            isSubmittingRef.current = false;
-         rzp.close();
+      const razorpay = new (window as unknown as { Razorpay: any }).Razorpay(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      razorpay.on("payment.failed", function (response: any) {
+        setPaymentErrorReason(response.error.description);
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
       });
-      rzp.open();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to initiate payment");
+      razorpay.open();
+    } catch (err: unknown) {
+      setPaymentErrorReason((err as Error).message || "An error occurred during payment initiation.");
       setIsSubmitting(false);
-            isSubmittingRef.current = false;
+      isSubmittingRef.current = false;
     }
   };
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
-      <Container className="py-20 flex justify-center">
-        <div className="animate-pulse space-y-4 text-center">
-          <div className="h-6 w-32 bg-brand-border rounded mx-auto" />
-          <div className="h-4 w-48 bg-brand-border/60 rounded mx-auto" />
-        </div>
-      </Container>
+      <div className="min-h-screen bg-stone-50 pt-24 pb-20">
+        <Container>
+          <div className="animate-pulse space-y-8">
+            <div className="h-10 w-48 bg-stone-200 rounded-lg" />
+            <div className="flex flex-col lg:flex-row gap-8">
+              <div className="flex-1 space-y-4">
+                {[...Array(3)].map((_, i) => <div key={i} className="h-32 bg-stone-200 rounded-2xl" />)}
+              </div>
+              <div className="w-full lg:w-96 h-96 bg-stone-200 rounded-2xl" />
+            </div>
+          </div>
+        </Container>
+      </div>
     );
   }
 
-  return (
-    <div className="bg-brand-bg min-h-screen pb-20">
+  const fees = {
+    delivery: cartDisplay?.items.length ? 49.00 : 0,
+    taxes: cartDisplay ? cartDisplay.totalAmount * 0.05 : 0,
+  };
+  const finalTotal = cartDisplay ? cartDisplay.totalAmount + fees.delivery + fees.taxes : 0;
 
-      <Container className="pt-10">
-        <div className="mb-8">
-          <h1 className="font-serif text-4xl sm:text-5xl font-semibold tracking-tight text-brand-fg mb-3">
-            Checkout
-          </h1>
-          <p className="text-brand-muted text-lg">
-            Review your order and securely complete payment.
-          </p>
+  return (
+    <div className="min-h-screen bg-stone-50 pt-24 pb-24">
+      <Container>
+        <div className="mb-8 flex items-center gap-4">
+          <button onClick={() => router.back()} className="w-10 h-10 bg-white border border-stone-200 rounded-full flex items-center justify-center text-stone-600 hover:text-stone-900 transition-colors shadow-sm">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-3xl font-extrabold text-stone-900">Checkout</h1>
         </div>
 
-        {error && (
-          <div className="mb-8 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
-            {error}
-            {pendingOrderId && (
-              <div className="mt-2 text-sm">
-                Order #{pendingOrderId} was created but payment failed. You can retry payment from the orders page.
-              </div>
-            )}
+        {error ? (
+          <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-100 font-medium">{error}</div>
+        ) : paymentErrorReason ? (
+          <div className="bg-white rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-sm border border-stone-100 max-w-lg mx-auto">
+            <AlertCircle className="w-16 h-16 text-red-400 mb-4" />
+            <h2 className="text-2xl font-bold text-stone-900 mb-2">Payment Failed</h2>
+            <p className="text-stone-500 mb-8">{paymentErrorReason}</p>
+            <div className="flex gap-4 w-full">
+              <Button onClick={() => handlePlaceOrder()} variant="primary" className="flex-1 font-bold">Try Again</Button>
+              <Button href="/cart" variant="outline" className="flex-1 font-bold">Back to Cart</Button>
+            </div>
           </div>
-        )}
-
-        {paymentFailed ? (
-          <Card className="p-8 md:p-12 text-center bg-white shadow-sm border-red-200">
-            <div className="w-16 h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-serif font-semibold text-brand-fg mb-3">
-              Payment didn't go through
-            </h2>
-            <p className="text-brand-muted text-lg mb-8 max-w-md mx-auto">
-              Your order and cart are safe. You can try the payment again.
-              {paymentErrorReason && (
-                <span className="block mt-2 text-sm text-red-600 bg-red-50 py-2 px-3 rounded-md border border-red-100">
-                  {paymentErrorReason}
-                </span>
-              )}
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Button
-                type="button"
-                variant="primary"
-                size="lg"
-                onClick={handlePlaceOrder}
-                disabled={isSubmitting}
-                className="min-w-[200px]"
-              >
-                {isSubmitting ? "Retrying..." : "Retry Payment"}
-              </Button>
-              <Link href="/cart">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-full sm:w-auto min-w-[200px]"
-                >
-                  Back to Cart
-                </Button>
-              </Link>
-            </div>
-          </Card>
         ) : !cartDisplay || cartDisplay.items.length === 0 ? (
-          <Card className="p-12 text-center bg-white shadow-sm border-brand-border/50">
-            <svg
-              className="w-12 h-12 text-brand-muted mx-auto mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-            <h2 className="text-xl font-medium text-brand-fg mb-2">
-              Your cart is empty
-            </h2>
-            <p className="text-brand-muted mb-6">
-              Looks like you haven&apos;t added anything to your cart yet.
-            </p>
-            <Link
-              href="/restaurants"
-              className="inline-block bg-brand-fg text-brand-bg px-6 py-2.5 rounded-full font-medium hover:bg-brand-fg/90 transition-colors"
-            >
-              Browse Restaurants
-            </Link>
-          </Card>
+          <div className="bg-white rounded-2xl p-16 text-center shadow-sm border border-stone-100 max-w-2xl mx-auto">
+            <h2 className="text-2xl font-bold text-stone-900 mb-2">Cart is empty</h2>
+            <Button href="/restaurants" variant="primary" className="font-bold px-8 mt-4">Browse Restaurants</Button>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            <div className="lg:col-span-2 space-y-6">
-              {/* Order Items Review */}
-              <Card className="p-6 bg-white shadow-xs">
-                <div className="flex items-center justify-between pb-4 mb-4 border-b border-brand-border">
-                  <div>
-                    <h2 className="font-serif text-xl font-medium text-brand-fg">
-                      Items Review
-                    </h2>
-                    <p className="text-xs text-brand-muted mt-0.5">
-                      Order from {cartDisplay.restaurantName}
-                    </p>
-                  </div>
-                  <Link
-                    href="/cart"
-                    className="text-xs font-medium text-brand-primary hover:text-brand-primary-hover underline underline-offset-4"
-                  >
-                    Edit Cart
-                  </Link>
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
+            
+            {/* Left Column - Checkout Steps */}
+            <div className="flex-1 w-full space-y-6">
+              
+              {/* Address */}
+              <div className="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-stone-900 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-brand-primary" /> Delivery Address
+                  </h2>
+                  <button className="text-sm font-bold text-brand-primary hover:text-brand-primary/80">Change</button>
                 </div>
+                <div className="bg-stone-50 rounded-xl p-4 border border-stone-200">
+                  <p className="font-bold text-stone-900">Home</p>
+                  <p className="text-sm text-stone-500 mt-1">{address}</p>
+                  <input type="text" className="mt-3 w-full bg-white border border-stone-200 rounded-lg p-2 text-sm focus:outline-none focus:border-brand-primary" value={address} onChange={e => setAddress(e.target.value)} placeholder="Enter full address" />
+                </div>
+              </div>
 
-                <div className="divide-y divide-brand-border/60">
-                  {cartDisplay.items.map((item) => (
-                    <div
-                      key={item.menuItemId}
-                      className="py-3.5 flex items-center justify-between gap-4 first:pt-0 last:pb-0"
-                    >
-                      <div className="space-y-0.5 flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-brand-fg text-sm truncate">
-                            {item.name}
-                          </span>
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-brand-bg text-brand-fg border border-brand-border shrink-0">
-                            × {item.quantity}
-                          </span>
-                        </div>
-                        {item.description && (
-                          <p className="text-xs text-brand-muted line-clamp-1">
-                            {item.description}
-                          </p>
-                        )}
-                        <p className="text-xs text-brand-muted">
-                          ₹{item.unitPrice.toFixed(2)} each
-                        </p>
+              {/* Delivery Time */}
+              <div className="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-stone-900 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-brand-primary" /> Delivery Time
+                  </h2>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-1 bg-brand-primary/5 border-2 border-brand-primary rounded-xl p-4 cursor-pointer">
+                    <p className="font-bold text-stone-900">Asap</p>
+                    <p className="text-sm text-stone-500 mt-1">20 - 30 mins</p>
+                  </div>
+                  <div className="flex-1 bg-stone-50 border-2 border-transparent rounded-xl p-4 cursor-pointer hover:border-stone-200 transition-colors">
+                    <p className="font-bold text-stone-900">Schedule</p>
+                    <p className="text-sm text-stone-500 mt-1">Choose time</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <div className="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-stone-900 flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-brand-primary" /> Payment Method
+                  </h2>
+                </div>
+                <div className="space-y-3">
+                  <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-colors ${paymentMethod === 'card' ? 'border-brand-primary bg-brand-primary/5' : 'border-stone-100 hover:border-stone-200'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-white shadow-sm rounded flex items-center justify-center"><CreditCard className="w-4 h-4 text-stone-600" /></div>
+                      <span className="font-bold text-stone-900">Credit / Debit Card</span>
+                    </div>
+                    <input type="radio" name="payment" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} className="w-4 h-4 text-brand-primary focus:ring-brand-primary" />
+                  </label>
+                  <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-colors ${paymentMethod === 'upi' ? 'border-brand-primary bg-brand-primary/5' : 'border-stone-100 hover:border-stone-200'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-white shadow-sm rounded flex items-center justify-center font-bold text-xs text-stone-600">UPI</div>
+                      <span className="font-bold text-stone-900">UPI / Netbanking</span>
+                    </div>
+                    <input type="radio" name="payment" checked={paymentMethod === 'upi'} onChange={() => setPaymentMethod('upi')} className="w-4 h-4 text-brand-primary focus:ring-brand-primary" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Items Summary */}
+              <div className="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm">
+                <h2 className="text-xl font-bold text-stone-900 mb-4">Items Review</h2>
+                <div className="space-y-3">
+                  {cartDisplay.items.map(item => (
+                    <div key={item.menuItemId} className="flex justify-between items-start gap-4 pb-3 border-b border-stone-100 last:border-0 last:pb-0">
+                      <div>
+                        <p className="font-bold text-stone-900"><span className="text-brand-primary mr-1">{item.quantity}x</span> {item.name}</p>
                       </div>
-                      <span className="font-serif font-semibold text-base text-brand-fg shrink-0">
-                        ₹{item.subtotal.toFixed(2)}
-                      </span>
+                      <p className="font-bold text-stone-900">₹{item.subtotal.toFixed(2)}</p>
                     </div>
                   ))}
                 </div>
-              </Card>
+              </div>
+
             </div>
 
-            {/* Right Column: Order Summary */}
-            <div className="lg:col-span-1">
-              <Card className="p-6 sm:p-8 bg-white shadow-xs sticky top-24">
-                <h2 className="font-serif text-2xl font-medium text-brand-fg mb-6 pb-4 border-b border-brand-border">
-                  Order Summary
-                </h2>
-
-                <div className="space-y-3.5 text-sm">
-                  <div className="flex justify-between text-brand-muted">
-                    <span>Items subtotal</span>
-                    <span className="font-medium text-brand-fg">
-                      ₹{cartDisplay.totalAmount.toFixed(2)}
-                    </span>
+            {/* Right Column - Order Summary */}
+            <div className="w-full lg:w-96 shrink-0">
+              <div className="bg-white rounded-2xl border border-stone-100 shadow-sm sticky top-24 overflow-hidden">
+                <div className="bg-stone-50 p-5 border-b border-stone-100">
+                  <h3 className="font-bold text-stone-900 text-lg">Order Summary</h3>
+                  <p className="text-sm text-stone-500">{cartDisplay.restaurantName}</p>
+                </div>
+                
+                <div className="p-5 space-y-4">
+                  <div className="flex justify-between text-sm font-medium text-stone-600">
+                    <span>Item Total</span>
+                    <span>₹{cartDisplay.totalAmount.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-brand-muted">
-                    <span>Delivery fee</span>
-                    <span className="font-medium text-emerald-600">Free</span>
+                  <div className="flex justify-between text-sm font-medium text-stone-600">
+                    <span>Delivery Fee</span>
+                    <span>₹{fees.delivery.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-brand-muted">
-                    <span>Taxes & charges</span>
-                    <span className="font-medium text-brand-fg">Included</span>
+                  <div className="flex justify-between text-sm font-medium text-stone-600">
+                    <span>Taxes (5%)</span>
+                    <span>₹{fees.taxes.toFixed(2)}</span>
                   </div>
-
-                  <div className="pt-4 mt-4 border-t border-brand-border flex justify-between items-baseline">
-                    <span className="font-serif text-lg font-medium text-brand-fg">
-                      Total
-                    </span>
-                    <span className="font-serif text-3xl font-semibold text-brand-primary">
-                      ₹{cartDisplay.totalAmount.toFixed(2)}
-                    </span>
+                  
+                  <div className="pt-4 border-t border-stone-100 border-dashed flex justify-between items-end">
+                    <div>
+                      <span className="block text-sm font-bold text-stone-500 uppercase">To Pay</span>
+                    </div>
+                    <span className="text-2xl font-extrabold text-stone-900">₹{finalTotal.toFixed(2)}</span>
                   </div>
                 </div>
 
-                <div className="mt-8 space-y-3">
+                <div className="p-5 bg-stone-50 border-t border-stone-100">
                   <Button
-                    type="button"
                     onClick={handlePlaceOrder}
-                    disabled={isSubmitting || !rawCart}
-                    size="lg"
+                    disabled={isSubmitting || !address.trim()}
                     variant="primary"
-                    className="w-full text-base font-medium h-13"
+                    className="w-full h-14 text-lg font-bold shadow-md shadow-brand-primary/20 flex items-center justify-center gap-2 disabled:opacity-70"
                   >
                     {isSubmitting ? (
                       <span className="flex items-center gap-2">
-                        <svg
-                          className="animate-spin h-5 w-5 text-white"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                        Processing Payment...
+                        <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                        Processing...
                       </span>
                     ) : (
-                      `Place Order & Pay • ₹${cartDisplay.totalAmount.toFixed(2)}`
+                      `Place Order • ₹${finalTotal.toFixed(2)}`
                     )}
                   </Button>
-                  <p className="text-center text-xs text-brand-muted">
-                    Order will be sent directly to {cartDisplay.restaurantName}.
-                  </p>
                 </div>
-              </Card>
+              </div>
             </div>
+            
           </div>
         )}
       </Container>

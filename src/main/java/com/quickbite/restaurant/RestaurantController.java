@@ -6,15 +6,28 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 @RestController
 @RequestMapping("/api/restaurants")
 public class RestaurantController {
+    @GetMapping("/{restaurantId}")
+    public Restaurant getRestaurantById(@PathVariable Long restaurantId) {
+        Restaurant restaurant = restaurantService.getRestaurantById(restaurantId);
+        if (restaurant == null || (restaurant.getStatus() != null && restaurant.getStatus() != RestaurantStatus.APPROVED)) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Restaurant not found");
+        }
+        return restaurant;
+    }
+
 
     private final RestaurantService restaurantService;
 
@@ -22,16 +35,58 @@ public class RestaurantController {
         this.restaurantService = restaurantService;
     }
 
-    @GetMapping
-    public List<Restaurant> getAllRestaurants() {
-        return restaurantService.getAllRestaurants();
+    
+    @GetMapping("/cities")
+    public List<String> getCities() {
+        return restaurantService.getDistinctCities();
     }
 
+    @GetMapping
+    public Page<Restaurant> searchRestaurants(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "16") int size,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String locality,
+            @RequestParam(required = false) String cuisine,
+            @RequestParam(required = false) Double minRating,
+            @RequestParam(required = false) Integer priceRange,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "rating,desc") String[] sort) {
+        
+        // Enforce safe maximum page size
+        int safeSize = Math.min(size, 50);
+        
+        Sort.Direction direction = Sort.Direction.DESC;
+        String property = "rating";
+        
+        if (sort != null && sort.length > 0) {
+            if (sort.length == 2) {
+                property = sort[0];
+                direction = Sort.Direction.fromString(sort[1]);
+            } else if (sort.length == 1) {
+                // If it's comma separated in a single string (e.g. ?sort=rating,desc)
+                String[] parts = sort[0].split(",");
+                if (parts.length == 2) {
+                    property = parts[0];
+                    direction = Sort.Direction.fromString(parts[1]);
+                } else {
+                    property = sort[0];
+                }
+            }
+        }
+        
+        PageRequest pageRequest = PageRequest.of(page, safeSize, Sort.by(direction, property));
+        return restaurantService.searchRestaurants(city, locality, cuisine, minRating, priceRange, search, pageRequest);
+    }
+
+
     @GetMapping("/nearby")
-    public List<NearbyRestaurantProjection> getNearbyRestaurants(
+    public Page<NearbyRestaurantProjection> getNearbyRestaurants(
             @RequestParam(name = "latitude", required = false) Double latitude,
             @RequestParam(name = "longitude", required = false) Double longitude,
-            @RequestParam(name = "radiusKm", required = false) Double radiusKm) {
+            @RequestParam(name = "radiusKm", required = false) Double radiusKm,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "16") int size) {
         
         if (latitude == null || latitude < -90 || latitude > 90) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or missing latitude (-90 to 90)");
@@ -43,7 +98,9 @@ public class RestaurantController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or missing radiusKm (must be > 0)");
         }
         
-        return restaurantService.getNearbyRestaurants(latitude, longitude, radiusKm);
+        int safeSize = Math.min(size, 16); // Maximum 16 results as per requirements
+        
+        return restaurantService.getNearbyRestaurants(latitude, longitude, radiusKm, PageRequest.of(page, safeSize));
     }
 
     @PostMapping

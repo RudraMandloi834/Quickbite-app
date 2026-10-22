@@ -26,7 +26,7 @@ public class RestaurantDuplicateTest {
 
     @Test
     void rejectsDuplicateRestaurantApplication() {
-        CreateRestaurantRequest request = new CreateRestaurantRequest(
+        CreateRestaurantRequest request = new CreateRestaurantRequest("phone", "email", "09:00", "22:00", 
                 "Duplicate Burger", "Fast Food", "123 Main St", 0.0, "123 Main St", "City", "Area", 0.0, 0.0, "9AM-9PM", 5.0, ""
         );
 

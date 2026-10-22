@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
   return (
     <Container className="py-16 md:py-24 flex-1 max-w-md mx-auto w-full">
       <div className="text-center mb-8">
-        <h1 className="text-3xl sm:text-4xl font-serif font-semibold text-brand-fg tracking-tight mb-3">
+        <h1 className="text-3xl sm:text-4xl font-sans font-semibold text-brand-fg tracking-tight mb-3">
           Reset password
         </h1>
         <p className="text-brand-muted text-lg">

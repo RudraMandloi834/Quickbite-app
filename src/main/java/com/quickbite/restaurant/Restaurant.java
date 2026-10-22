@@ -24,6 +24,10 @@ public class Restaurant {
     private String cuisine;
     private String location; // legacy/frontend field
     private double rating;
+    private Integer reviewCount = 0;
+    private Integer priceRange = 1;
+    private Boolean deliveryAvailability = true;
+    private Integer deliveryTimeMinutes = 30;
 
     private String address;
     private String city;
@@ -43,6 +47,14 @@ public class Restaurant {
     private Long reviewedBy;
     private java.time.Instant reviewedAt;
     private String rejectionReason;
+    
+    @jakarta.persistence.Transient
+    private String tempPassword;
+    
+    private String phone;
+    private String email;
+    private String openingTime;
+    private String closingTime;
 
     public Long getReviewedBy() { return reviewedBy; }
     public void setReviewedBy(Long reviewedBy) { this.reviewedBy = reviewedBy; }
@@ -81,6 +93,14 @@ public class Restaurant {
     public String getCuisine() { return cuisine; }
     public String getLocation() { return location; }
     public double getRating() { return rating; }
+    public Integer getReviewCount() { return reviewCount; }
+    public void setReviewCount(Integer reviewCount) { this.reviewCount = reviewCount; }
+    public Integer getPriceRange() { return priceRange; }
+    public void setPriceRange(Integer priceRange) { this.priceRange = priceRange; }
+    public Boolean getDeliveryAvailability() { return deliveryAvailability; }
+    public void setDeliveryAvailability(Boolean deliveryAvailability) { this.deliveryAvailability = deliveryAvailability; }
+    public Integer getDeliveryTimeMinutes() { return deliveryTimeMinutes; }
+    public void setDeliveryTimeMinutes(Integer deliveryTimeMinutes) { this.deliveryTimeMinutes = deliveryTimeMinutes; }
     public String getAddress() { return address; }
     public String getCity() { return city; }
     public String getArea() { return area; }
@@ -105,4 +125,15 @@ public class Restaurant {
     public void setOwnerId(Long ownerId) {
         this.ownerId = ownerId;
     }
+
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getOpeningTime() { return openingTime; }
+    public void setOpeningTime(String openingTime) { this.openingTime = openingTime; }
+    public String getClosingTime() { return closingTime; }
+    public String getTempPassword() { return tempPassword; }
+    public void setTempPassword(String tempPassword) { this.tempPassword = tempPassword; }
+    public void setClosingTime(String closingTime) { this.closingTime = closingTime; }
 }
