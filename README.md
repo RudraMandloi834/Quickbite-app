@@ -36,7 +36,7 @@
 
 1. [Executive Summary & Technical Highlights](#-executive-summary--technical-highlights)
 2. [User Personas & Supported Roles](#-user-personas--supported-roles)
-3. [Visual Showcase & Screenshot Checklist](#-visual-showcase--screenshot-checklist)
+3. [Visual Showcase & Application Screenshots](#-visual-showcase--application-screenshots)
 4. [Verified Feature Matrix](#-verified-feature-matrix)
 5. [Technology Stack](#-technology-stack)
 6. [System Architecture](#-system-architecture)
@@ -99,21 +99,49 @@ flowchart LR
 
 ---
 
-## 📸 Visual Showcase & Screenshot Checklist
+## 📸 Visual Showcase & Application Screenshots
 
-To maintain genuine engineering credibility, QuickBite does not use generic mockup placeholders. Below is the organized directory checklist for repository screenshots:
+A visual walkthrough of QuickBite across all core user journeys—from restaurant discovery and dual-mode checkout to kitchen order dispatch and live delivery tracking:
 
-```
-docs/screenshots/
-├── 01-customer-browse.png       # Multi-city restaurant catalogue with cuisine filters
-├── 02-cart-and-checkout.png     # Dual-mode checkout (Card / UPI / Cash on Delivery)
-├── 03-customer-live-tracking.png# Real-time SSE order progression timeline
-├── 04-restaurant-kitchen-kds.png# Live kitchen dashboard with active orders
-├── 05-driver-active-delivery.png# Driver route view with Cash Collection banner
-└── 06-operator-admin-console.png# Platform administration & approval workflow
-```
+### 1. Customer Discovery & Search
+![Customer Landing Page](docs/screenshots/home.png)
 
-> **Developer Note:** When adding screenshots, place the PNG files in `docs/screenshots/` matching the filenames above and commit them.
+*Figure 1: **Customer Landing & Discovery Portal** (`docs/screenshots/home.png`) — City-level localization selector, cuisine search bar, customer review metrics (`4.9/5 Happy Customers`), and quick-access navigation for cart and active orders.*
+
+---
+
+### 2. Multi-City Restaurant Directory
+![Restaurant Directory & Filters](docs/screenshots/restaurants.png)
+
+*Figure 2: **Restaurant Catalogue & Dynamic Filters** (`docs/screenshots/restaurants.png`) — Filtered browsing of approved partner kitchens in Bengaluru, displaying delivery ETAs (`24 mins`), ratings (`★ 4.9`), price indicators, locality filtering, and multiple sorting dimensions.*
+
+---
+
+### 3. Dual-Mode Checkout & Payment Processing
+![Dual-Mode Checkout with Razorpay](docs/screenshots/payment.png)
+
+*Figure 3: **Checkout & Payment Gateway Modal** (`docs/screenshots/payment.png`) — Order summary with dual payment options (Cards, Netbanking, Wallets, and Cash on Delivery). Features the secure Razorpay payment modal with test-mode indicator and card entry fields.*
+
+---
+
+### 4. Restaurant Kitchen Display System (KDS)
+![Restaurant Kitchen Dashboard](docs/screenshots/resttracking.png)
+
+*Figure 4: **Live Kitchen Dashboard** (`docs/screenshots/resttracking.png`) — Partner console (`Swad Rasoi`) with active Server-Sent Events connection (`● LIVE UPDATES ACTIVE`), operational status counters (New Orders, Preparing, Ready, Completed), and live order action controls (`[Accept Order]`, `[Reject]`).*
+
+---
+
+### 5. Delivery Partner Logistics Console
+![Driver Delivery Dashboard](docs/screenshots/driver.png)
+
+*Figure 5: **Driver Dispatch & Active Delivery Console** (`docs/screenshots/driver.png`) — Dedicated delivery partner interface showing real-time SSE listener (`● LIVE UPDATES ACTIVE`), active pickup and drop-off addresses, order items, and one-tap delivery completion action (`[Mark Delivered]`).*
+
+---
+
+### 6. Real-Time Customer Order Tracking
+![Customer Real-Time Tracking](docs/screenshots/customer.png)
+
+*Figure 6: **Customer Real-Time Order Progression** (`docs/screenshots/customer.png`) — Live SSE-synchronized tracking timeline (`Order Placed` → `Restaurant Accepted` → `Preparing` → `Ready for Pickup` → `Delivery Partner Assigned` → `Picked Up` → `On The Way` → `Delivered`), itemized digital receipt, Cash on Delivery settlement status (`Paid`), and assigned delivery partner credentials.*
 
 ---
 
