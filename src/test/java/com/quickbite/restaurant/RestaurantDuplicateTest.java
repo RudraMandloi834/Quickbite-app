@@ -26,10 +26,11 @@ public class RestaurantDuplicateTest {
 
     @Test
     void rejectsDuplicateRestaurantApplication() {
-        CreateRestaurantRequest request = new CreateRestaurantRequest("phone", "email", "09:00", "22:00", 
-                "Duplicate Burger", "Fast Food", "123 Main St", 0.0, "123 Main St", "City", "Area", 0.0, 0.0, "9AM-9PM", 5.0, ""
+        CreateRestaurantRequest request = new CreateRestaurantRequest("Duplicate Burger", "1234567890", "test@test.com", "09:00", "22:00", 
+                "Fast Food", "123 Main St", 0.0, "123 Main St", "City", "Area", 0.0, 0.0, "9AM-9PM", 5.0, ""
         );
 
+        when(restaurantRepository.findByOwnerId(1L)).thenReturn(java.util.Collections.emptyList());
         when(restaurantRepository.existsByName("Duplicate Burger")).thenReturn(true);
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> {
