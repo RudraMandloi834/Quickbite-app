@@ -125,6 +125,10 @@ public class Delivery {
     private java.math.BigDecimal orderTotal;
     @jakarta.persistence.Transient
     private String orderItemsSummary;
+    @jakarta.persistence.Transient
+    private String paymentMethod;
+    @jakarta.persistence.Transient
+    private String paymentStatus;
 
     public String getRestaurantName() { return restaurantName; }
     public void setRestaurantName(String name) { this.restaurantName = name; }
@@ -140,4 +144,8 @@ public class Delivery {
     public void setOrderTotal(java.math.BigDecimal total) { this.orderTotal = total; }
     public String getOrderItemsSummary() { return orderItemsSummary; }
     public void setOrderItemsSummary(String items) { this.orderItemsSummary = items; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public String getPaymentStatus() { return paymentStatus; }
+    public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
 }

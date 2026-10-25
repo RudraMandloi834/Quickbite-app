@@ -246,6 +246,20 @@ export default function OrderTrackingPage() {
               
               <div className="border-t border-stone-100 pt-3 space-y-2 text-sm">
                 <div className="flex justify-between text-stone-500">
+                  <span>Payment Method</span>
+                  <span className="font-semibold text-stone-800">
+                    {order.paymentMethod === 'COD' ? 'Cash on Delivery (COD)' : 'Paid Online'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-stone-500">
+                  <span>Payment Status</span>
+                  <span className={`font-semibold px-2 py-0.5 rounded text-xs ${
+                    order.paymentStatus === 'SUCCESS' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {order.paymentStatus === 'SUCCESS' ? 'Paid' : order.paymentMethod === 'COD' ? 'Pending Cash Collection' : 'Pending'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-stone-500">
                   <span>Subtotal</span>
                   <span>₹{order.totalAmount?.toFixed(2)}</span>
                 </div>

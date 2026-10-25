@@ -149,10 +149,11 @@ export async function getCustomerById(customerId: number | string): Promise<Cust
   return res.json();
 }
 
-export async function createOrderFromCart(cartId: number): Promise<Order> {
+export async function createOrderFromCart(cartId: number, paymentMethod?: string): Promise<Order> {
   const res = await authFetch(`${getApiBaseUrl()}/api/orders/from-cart/${cartId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentMethod: paymentMethod || "CARD" }),
   });
   return res.json();
 }
@@ -247,6 +248,14 @@ export async function updateDeliveryStatus(deliveryId: number, status: string): 
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new ApiError(await res.text(), res.status);
+  return res.json();
+}
+
+export async function confirmCashCollection(deliveryId: number): Promise<Delivery> {
+  const res = await authFetch(`${getApiBaseUrl()}/api/deliveries/${deliveryId}/collect-cash`, {
+    method: "POST",
   });
   if (!res.ok) throw new ApiError(await res.text(), res.status);
   return res.json();

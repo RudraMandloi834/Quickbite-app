@@ -10,4 +10,13 @@ export interface Delivery {
   pickedUpAt?: string;
   outForDeliveryAt?: string;
   deliveredAt?: string;
+  restaurantName?: string;
+  restaurantAddress?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  orderTotal?: number;
+  orderItemsSummary?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
 }

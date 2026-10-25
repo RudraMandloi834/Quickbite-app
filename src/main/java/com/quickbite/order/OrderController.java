@@ -21,10 +21,16 @@ public class OrderController {
         this.lifecycleService = lifecycleService;
     }
 
+    public record CreateOrderRequest(String paymentMethod) {}
+
     @PostMapping("/from-cart/{cartId}")
     @ResponseStatus(HttpStatus.CREATED)
-    public Order createOrderFromCart(@PathVariable Long cartId) {
-        return orderService.createOrderFromCart(cartId);
+    public Order createOrderFromCart(
+            @PathVariable Long cartId,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) CreateOrderRequest request
+    ) {
+        String paymentMethod = (request != null && request.paymentMethod() != null) ? request.paymentMethod() : "CARD";
+        return orderService.createOrderFromCart(cartId, paymentMethod);
     }
 
     @GetMapping("/{orderId}")

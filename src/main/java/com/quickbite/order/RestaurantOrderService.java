@@ -22,6 +22,7 @@ public class RestaurantOrderService {
     private final OrderEventPublisher orderEventPublisher;
     private final CustomerRepository customerRepository;
     private final DeliveryRepository deliveryRepository;
+    private final com.quickbite.payment.PaymentRepository paymentRepository;
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private OrderLifecycleService lifecycleService;
@@ -32,13 +33,15 @@ public class RestaurantOrderService {
             RestaurantService restaurantService,
             OrderEventPublisher orderEventPublisher,
             CustomerRepository customerRepository,
-            DeliveryRepository deliveryRepository) {
+            DeliveryRepository deliveryRepository,
+            com.quickbite.payment.PaymentRepository paymentRepository) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.restaurantService = restaurantService;
         this.orderEventPublisher = orderEventPublisher;
         this.customerRepository = customerRepository;
         this.deliveryRepository = deliveryRepository;
+        this.paymentRepository = paymentRepository;
     }
 
     public List<Order> getRestaurantOrders(Long restaurantId) {
@@ -58,7 +61,13 @@ public class RestaurantOrderService {
             }
             order.setDeliveryAddress("Pending Delivery System Address");
             
-            order.setPaymentMethod("CARD");
+            order.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod() : "CARD");
+            if (paymentRepository != null) {
+                paymentRepository.findByOrderId(order.getId()).ifPresentOrElse(
+                    p -> order.setPaymentStatus(p.getStatus().name()),
+                    () -> order.setPaymentStatus("PENDING")
+                );
+            }
             Delivery delivery = deliveryRepository.findByOrderId(order.getId()).orElse(null);
             if (delivery != null) {
                 order.setDriverName(delivery.getDriverName());
@@ -90,12 +99,18 @@ public class RestaurantOrderService {
         }
         order.setDeliveryAddress("Pending Delivery System Address");
         
-            order.setPaymentMethod("CARD");
-            Delivery delivery = deliveryRepository.findByOrderId(order.getId()).orElse(null);
-            if (delivery != null) {
-                order.setDriverName(delivery.getDriverName());
-                order.setDriverPhone(delivery.getDriverPhone());
-            }
+        order.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod() : "CARD");
+        if (paymentRepository != null) {
+            paymentRepository.findByOrderId(order.getId()).ifPresentOrElse(
+                p -> order.setPaymentStatus(p.getStatus().name()),
+                () -> order.setPaymentStatus("PENDING")
+            );
+        }
+        Delivery delivery = deliveryRepository.findByOrderId(order.getId()).orElse(null);
+        if (delivery != null) {
+            order.setDriverName(delivery.getDriverName());
+            order.setDriverPhone(delivery.getDriverPhone());
+        }
         return order;
     }
 

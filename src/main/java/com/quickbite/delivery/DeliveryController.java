@@ -69,4 +69,11 @@ public class DeliveryController {
         Long driverId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
         return deliveryService.updateStatus(deliveryId, request.status(), driverId);
     }
+
+    @PostMapping("/{deliveryId}/collect-cash")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('DRIVER') or hasRole('OPERATOR')")
+    public Delivery confirmCashCollection(@PathVariable Long deliveryId) {
+        Long driverId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        return deliveryService.confirmCashCollection(deliveryId, driverId);
+    }
 }

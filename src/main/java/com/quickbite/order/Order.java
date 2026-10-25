@@ -94,8 +94,9 @@ public class Order {
     private String customerPhone;
     @jakarta.persistence.Transient
     private String deliveryAddress;
-    @jakarta.persistence.Transient
     private String paymentMethod;
+    @jakarta.persistence.Transient
+    private String paymentStatus;
 
     public String getCustomerName() { return customerName; }
     public void setCustomerName(String customerName) { this.customerName = customerName; }
@@ -105,6 +106,8 @@ public class Order {
     public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
     public String getPaymentMethod() { return paymentMethod; }
     public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public String getPaymentStatus() { return paymentStatus; }
+    public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
 
     public Instant getAcceptedAt() { return acceptedAt; }
     public void setAcceptedAt(Instant acceptedAt) { this.acceptedAt = acceptedAt; }

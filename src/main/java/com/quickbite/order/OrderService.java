@@ -25,6 +25,7 @@ public class OrderService {
     private final MenuItemRepository menuItemRepository;
     private final CustomerRepository customerRepository;
     private final com.quickbite.restaurant.RestaurantRepository restaurantRepository;
+    private final com.quickbite.payment.PaymentRepository paymentRepository;
     private final OrderEventPublisher orderEventPublisher;
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
@@ -39,7 +40,20 @@ public class OrderService {
             CustomerRepository customerRepository,
             OrderEventPublisher orderEventPublisher
     ) {
-        this(orderRepository, orderItemRepository, cartRepository, cartItemRepository, menuItemRepository, customerRepository, null, orderEventPublisher);
+        this(orderRepository, orderItemRepository, cartRepository, cartItemRepository, menuItemRepository, customerRepository, null, null, orderEventPublisher);
+    }
+
+    public OrderService(
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            CartRepository cartRepository,
+            CartItemRepository cartItemRepository,
+            MenuItemRepository menuItemRepository,
+            CustomerRepository customerRepository,
+            com.quickbite.restaurant.RestaurantRepository restaurantRepository,
+            OrderEventPublisher orderEventPublisher
+    ) {
+        this(orderRepository, orderItemRepository, cartRepository, cartItemRepository, menuItemRepository, customerRepository, restaurantRepository, null, orderEventPublisher);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -51,6 +65,7 @@ public class OrderService {
             MenuItemRepository menuItemRepository,
             CustomerRepository customerRepository,
             com.quickbite.restaurant.RestaurantRepository restaurantRepository,
+            com.quickbite.payment.PaymentRepository paymentRepository,
             OrderEventPublisher orderEventPublisher
     ) {
         this.orderRepository = orderRepository;
@@ -60,11 +75,22 @@ public class OrderService {
         this.menuItemRepository = menuItemRepository;
         this.customerRepository = customerRepository;
         this.restaurantRepository = restaurantRepository;
+        this.paymentRepository = paymentRepository;
         this.orderEventPublisher = orderEventPublisher;
     }
 
     @Transactional
     public Order createOrderFromCart(Long cartId) {
+        return createOrderFromCart(cartId, "CARD");
+    }
+
+    @Transactional
+    public Order createOrderFromCart(Long cartId, String paymentMethod) {
+        String method = (paymentMethod == null || paymentMethod.isBlank()) ? "CARD" : paymentMethod.trim().toUpperCase();
+        if (!method.equals("CARD") && !method.equals("UPI") && !method.equals("COD")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment method: " + paymentMethod);
+        }
+
         Cart cart = cartRepository.findById(cartId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart not found"));
         if (!cart.getCustomerId().equals(com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId())) {
@@ -92,23 +118,37 @@ public class OrderService {
             });
         }
 
-        Order order = orderRepository.save(new Order(
+        Order order = new Order(
                 cart.getCustomerId(),
                 cart.getRestaurantId(),
                 cart.getTotalAmount()
-        ));
-        Order finalOrder = order;
+        );
+        order.setPaymentMethod(method);
+        Order savedOrder = orderRepository.save(order);
 
         List<OrderItem> orderItems = cartItems.stream()
-                .map(cartItem -> createOrderItem(finalOrder.getId(), cartItem))
+                .map(cartItem -> createOrderItem(savedOrder.getId(), cartItem))
                 .toList();
         orderItemRepository.saveAll(orderItems);
 
+        // Delete cart items to prevent duplicate order submissions from the same cart
+        cartItemRepository.deleteAll(cartItems);
 
+        if ("COD".equals(method) && paymentRepository != null) {
+            paymentRepository.save(new com.quickbite.payment.Payment(
+                    savedOrder.getId(),
+                    savedOrder.getTotalAmount(),
+                    "COD_" + savedOrder.getId(),
+                    com.quickbite.payment.PaymentStatus.PENDING
+            ));
+            savedOrder.setPaymentStatus("PENDING");
+        } else {
+            savedOrder.setPaymentStatus("PENDING");
+        }
 
-        finalOrder.setItems(orderItems);
-        orderEventPublisher.publishOrderCreated(finalOrder);
-        return finalOrder;
+        savedOrder.setItems(orderItems);
+        orderEventPublisher.publishOrderCreated(savedOrder);
+        return savedOrder;
     }
 
     public Order getOrder(Long orderId) {
@@ -118,6 +158,12 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
         order.setItems(orderItemRepository.findByOrderId(orderId));
+        if (paymentRepository != null) {
+            paymentRepository.findByOrderId(orderId).ifPresentOrElse(
+                    p -> order.setPaymentStatus(p.getStatus().name()),
+                    () -> order.setPaymentStatus("PENDING")
+            );
+        }
         return order;
     }
 
@@ -128,6 +174,12 @@ public class OrderService {
         List<Order> orders = orderRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
         for (Order order : orders) {
             order.setItems(orderItemRepository.findByOrderId(order.getId()));
+            if (paymentRepository != null) {
+                paymentRepository.findByOrderId(order.getId()).ifPresentOrElse(
+                        p -> order.setPaymentStatus(p.getStatus().name()),
+                        () -> order.setPaymentStatus("PENDING")
+                );
+            }
         }
         return orders;
     }

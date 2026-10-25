@@ -39,4 +39,11 @@ public class PaymentController {
     public Payment failPayment(@PathVariable Long paymentId) {
         return paymentService.failPayment(paymentId);
     }
+
+    @PostMapping("/orders/{orderId}/collect-cash")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('DRIVER') or hasRole('OPERATOR')")
+    public Payment confirmCashCollection(@PathVariable Long orderId) {
+        Long driverId = com.quickbite.security.SecurityUtils.getAuthenticatedCustomerId();
+        return paymentService.confirmCashCollection(orderId, driverId);
+    }
 }

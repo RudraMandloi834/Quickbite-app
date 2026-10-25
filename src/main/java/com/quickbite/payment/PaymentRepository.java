@@ -7,4 +7,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     boolean existsByOrderIdAndStatus(Long orderId, PaymentStatus status);
 
     java.util.Optional<Payment> findByRazorpayOrderId(String razorpayOrderId);
+
+    java.util.Optional<Payment> findByOrderId(Long orderId);
 }

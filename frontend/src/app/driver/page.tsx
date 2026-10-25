@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSSE } from "@/hooks/useSSE";
 import { authFetch, getApiBaseUrl } from "@/lib/api";
-import { Package, MapPin, CheckCircle2, Navigation, Clock, User, Phone, Check } from "lucide-react";
+import { Package, MapPin, CheckCircle2, Navigation, Clock, User, Phone, Check, Banknote } from "lucide-react";
 
 export default function DriverDashboardPage() {
   const router = useRouter();
@@ -66,6 +66,22 @@ export default function DriverDashboardPage() {
     }
   });
 
+  const collectCashMutation = useMutation({
+    mutationFn: async (deliveryId: number) => {
+      const res = await authFetch(`${getApiBaseUrl()}/api/deliveries/${deliveryId}/collect-cash`, {
+        method: "POST"
+      });
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "Failed to confirm cash collection");
+        throw new Error(errorText || "Failed to confirm cash collection");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["driverDeliveries"] });
+    }
+  });
+
   if (authLoading) return <div className="p-20 text-center text-stone-500 font-medium">Loading Dashboard...</div>;
   if (!user || !user.roles?.includes("DRIVER")) {
     return <div className="p-20 text-center text-red-500 font-bold">Access Denied. You must be an approved driver.</div>;
@@ -97,10 +113,10 @@ export default function DriverDashboardPage() {
         </div>
 
         {/* Error Banner */}
-        {(assignMutation.isError || updateStatusMutation.isError) && (
+        {(assignMutation.isError || updateStatusMutation.isError || collectCashMutation.isError) && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm font-semibold rounded-2xl flex items-center justify-between">
-            <span>Action failed: {((assignMutation.error || updateStatusMutation.error) as any)?.message || "An error occurred"}</span>
-            <button onClick={() => { assignMutation.reset(); updateStatusMutation.reset(); }} className="text-red-500 hover:text-red-700 font-bold ml-4">✕</button>
+            <span>Action failed: {((assignMutation.error || updateStatusMutation.error || collectCashMutation.error) as any)?.message || "An error occurred"}</span>
+            <button onClick={() => { assignMutation.reset(); updateStatusMutation.reset(); collectCashMutation.reset(); }} className="text-red-500 hover:text-red-700 font-bold ml-4">✕</button>
           </div>
         )}
 
@@ -129,10 +145,15 @@ export default function DriverDashboardPage() {
                         <h3 className="font-bold text-stone-900">{delivery.restaurantName || "Restaurant"}</h3>
                         <p className="text-sm text-stone-500 line-clamp-1">{delivery.restaurantAddress || "Address not provided"}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex flex-col items-end gap-1">
                         <span className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-lg uppercase tracking-wide">
                           Ready
                         </span>
+                        {delivery.paymentMethod === 'COD' && (
+                          <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-bold rounded-lg">
+                            💵 COD • ₹{delivery.orderTotal?.toFixed(2)}
+                          </span>
+                        )}
                       </div>
                     </div>
                     
@@ -230,6 +251,41 @@ export default function DriverDashboardPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Cash on Delivery Information & Confirmation */}
+                {activeDelivery.paymentMethod === 'COD' && (
+                  <div className="mb-6 p-4 rounded-2xl border transition-all">
+                    {activeDelivery.paymentStatus === 'SUCCESS' ? (
+                      <div className="flex items-center justify-between text-green-800 bg-green-50/60 p-3 rounded-xl">
+                        <div className="flex items-center gap-2.5">
+                          <Check className="w-5 h-5 text-green-600" />
+                          <span className="font-bold">Cash Collected: ₹{activeDelivery.orderTotal?.toFixed(2)}</span>
+                        </div>
+                        <span className="text-xs uppercase tracking-wider font-bold bg-green-200 text-green-800 px-2.5 py-1 rounded-lg">PAID</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-amber-50/80 p-3.5 rounded-xl border border-amber-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                            <Banknote className="w-5 h-5 text-amber-700" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-amber-950">Cash on Delivery (COD)</p>
+                            <p className="text-sm text-amber-800">Collect <span className="font-black text-amber-950">₹{activeDelivery.orderTotal?.toFixed(2)}</span> from customer</p>
+                          </div>
+                        </div>
+                        <button
+                          disabled={collectCashMutation.isPending}
+                          onClick={() => collectCashMutation.mutate(activeDelivery.id)}
+                          className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          {collectCashMutation.isPending ? "Confirming..." : "Confirm Cash Collected"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="pt-6 border-t border-stone-100 flex flex-col sm:flex-row gap-3">

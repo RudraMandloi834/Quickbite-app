@@ -14,6 +14,8 @@ export interface Order {
   restaurantId: number;
   totalAmount: number;
   status: "PENDING" | "CONFIRMED" | "CANCELLED" | string;
+  paymentMethod?: string;
+  paymentStatus?: string;
   createdAt: string;
   items?: OrderItem[];
 }

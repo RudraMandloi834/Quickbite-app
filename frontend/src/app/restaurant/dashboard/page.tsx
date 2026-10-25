@@ -196,6 +196,9 @@ export default function RestaurantDashboard() {
                       {order.status.replace(/_/g, ' ')}
                     </span>
                     <p className="text-xs text-stone-400 font-bold uppercase mt-2">Method: {order.paymentMethod || 'CARD'}</p>
+                    <p className={`text-xs font-bold uppercase mt-1 ${order.paymentStatus === 'SUCCESS' ? 'text-green-600' : 'text-amber-600'}`}>
+                      Payment: {order.paymentStatus || 'PENDING'}
+                    </p>
                   </div>
                 </div>
 

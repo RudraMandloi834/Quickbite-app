@@ -22,6 +22,9 @@ public class PaymentService {
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private com.quickbite.order.OrderLifecycleService lifecycleService;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.quickbite.event.SseService sseService;
     private final RazorpayClientWrapper razorpayClient;
     private final com.quickbite.delivery.DeliveryService deliveryService;
     private final Environment environment;
@@ -42,6 +45,10 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
 
+        if ("COD".equalsIgnoreCase(order.getPaymentMethod())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Online payment cannot be initiated for Cash on Delivery orders");
+        }
+
         if (order.getStatus() == OrderStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled orders cannot be paid");
         }
@@ -54,7 +61,7 @@ public class PaymentService {
 
         String[] profiles = environment.getActiveProfiles();
         boolean isDev = profiles != null && java.util.Arrays.asList(profiles).contains("dev");
-        if (isDev && (razorpayClient.getKeyId().equals("dummy") || razorpayClient.getKeyId().contains("dev"))) {
+        if (isDev && (razorpayClient.getKeyId().contains("dummy") || razorpayClient.getKeyId().contains("dev"))) {
             String devRazorpayOrderId = "dev_order_" + orderId + "_" + System.currentTimeMillis();
             Payment payment = paymentRepository.save(new Payment(
                     orderId,
@@ -170,5 +177,61 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
         return payment;
+    }
+
+    @Transactional
+    public Payment confirmCashCollection(Long orderId, Long requestingUserId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+
+        if (!"COD".equalsIgnoreCase(order.getPaymentMethod())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cash collection can only be confirmed for Cash on Delivery orders");
+        }
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean isOperator = auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR"));
+        boolean isAssignedDriver = deliveryService != null && deliveryService.isDriverAssignedToOrder(orderId, requestingUserId);
+
+        if (!isOperator && !isAssignedDriver) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the assigned driver or operator can confirm cash collection");
+        }
+
+        Payment payment = paymentRepository.findByOrderId(orderId)
+                .orElseGet(() -> paymentRepository.save(new Payment(
+                        orderId,
+                        order.getTotalAmount(),
+                        "COD_" + orderId,
+                        PaymentStatus.PENDING
+                )));
+
+        if (payment.getStatus() == PaymentStatus.SUCCESS) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cash has already been collected for this order");
+        }
+
+        payment.setStatus(PaymentStatus.SUCCESS);
+        payment.setRazorpayPaymentId("COD_COLLECTED_" + System.currentTimeMillis());
+        Payment savedPayment = paymentRepository.save(payment);
+
+        if (sseService != null) {
+            com.quickbite.event.SystemEvent sysEvent = new com.quickbite.event.SystemEvent(
+                    java.util.UUID.randomUUID().toString(),
+                    "PAYMENT_SUCCESS",
+                    order.getId(),
+                    order.getRestaurantId(),
+                    order.getCustomerId(),
+                    requestingUserId,
+                    "Cash collected: SUCCESS"
+            );
+            sseService.emitToCustomer(order.getCustomerId(), sysEvent);
+            if (order.getRestaurantId() != null) {
+                sseService.emitToRestaurant(order.getRestaurantId(), sysEvent);
+            }
+            if (requestingUserId != null) {
+                sseService.emitToDriver(requestingUserId, sysEvent);
+            }
+            sseService.emitToAdmins(sysEvent);
+        }
+
+        return savedPayment;
     }
 }

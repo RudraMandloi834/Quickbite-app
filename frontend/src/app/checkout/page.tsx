@@ -12,7 +12,7 @@ import { getCart, createOrderFromCart, createRazorpayOrder, verifyPayment } from
 import { getStoredCartId, fetchCartDisplay, clearStoredCartId } from "@/lib/cart";
 import { loadRazorpay } from "@/lib/razorpay";
 import { useAuth } from "@/context/AuthContext";
-import { ArrowLeft, MapPin, CreditCard, Clock, ChevronRight, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, MapPin, CreditCard, Clock, ChevronRight, CheckCircle2, AlertCircle, Banknote } from "lucide-react";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -76,6 +76,18 @@ export default function CheckoutPage() {
     setPaymentErrorReason(null);
 
     try {
+      if (paymentMethod === 'cod') {
+        let orderId = pendingOrderId;
+        if (!orderId) {
+          const order = await createOrderFromCart(rawCart.id, "COD");
+          orderId = order.id;
+          setPendingOrderId(order.id);
+        }
+        clearStoredCartId();
+        router.push(`/orders/${orderId}?success=true`);
+        return;
+      }
+
       const res = await loadRazorpay();
 
       if (!res || typeof (window as unknown as { Razorpay?: Function }).Razorpay !== "function") {
@@ -87,14 +99,14 @@ export default function CheckoutPage() {
 
       let orderIdToPay = pendingOrderId;
       if (!orderIdToPay) {
-        const order = await createOrderFromCart(rawCart.id);
+        const order = await createOrderFromCart(rawCart.id, paymentMethod === 'upi' ? "UPI" : "CARD");
         orderIdToPay = order.id;
         setPendingOrderId(order.id);
       }
 
       const initResponse = await createRazorpayOrder(orderIdToPay);
 
-      if (initResponse.razorpayKeyId === "dummy-key-id" || initResponse.razorpayKeyId.includes("dev")) {
+      if (initResponse.razorpayKeyId === "dummy-key-id" || initResponse.razorpayKeyId.includes("dev") || initResponse.razorpayKeyId.includes("dummy")) {
         await verifyPayment({
           razorpayPaymentId: "dev_success",
           razorpayOrderId: initResponse.razorpayOrderId,
@@ -264,6 +276,16 @@ export default function CheckoutPage() {
                       <span className="font-bold text-stone-900">UPI / Netbanking</span>
                     </div>
                     <input type="radio" name="payment" checked={paymentMethod === 'upi'} onChange={() => setPaymentMethod('upi')} className="w-4 h-4 text-brand-primary focus:ring-brand-primary" />
+                  </label>
+                  <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-colors ${paymentMethod === 'cod' ? 'border-brand-primary bg-brand-primary/5' : 'border-stone-100 hover:border-stone-200'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-white shadow-sm rounded flex items-center justify-center font-bold text-xs text-stone-600"><Banknote className="w-4 h-4 text-stone-600" /></div>
+                      <div>
+                        <span className="font-bold text-stone-900 block">Cash on Delivery (COD)</span>
+                        <span className="text-xs text-stone-500">Pay cash upon delivery</span>
+                      </div>
+                    </div>
+                    <input type="radio" name="payment" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} className="w-4 h-4 text-brand-primary focus:ring-brand-primary" />
                   </label>
                 </div>
               </div>

@@ -28,6 +28,12 @@ public class DeliveryService {
 
     private final com.quickbite.event.SseService sseService;
     private final DeliveryStatusHistoryRepository historyRepository;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.quickbite.payment.PaymentRepository paymentRepository;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.quickbite.payment.PaymentService paymentService;
 
     public DeliveryService(DeliveryRepository deliveryRepository, 
                            OrderRepository orderRepository, 
@@ -217,6 +223,13 @@ public class DeliveryService {
         Order order = orderRepository.findById(delivery.getOrderId()).orElse(null);
         if (order != null) {
             delivery.setOrderTotal(order.getTotalAmount());
+            delivery.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod() : "CARD");
+            if (paymentRepository != null) {
+                paymentRepository.findByOrderId(order.getId()).ifPresentOrElse(
+                        p -> delivery.setPaymentStatus(p.getStatus().name()),
+                        () -> delivery.setPaymentStatus("PENDING")
+                );
+            }
             if (order.getRestaurantId() != null) {
                 com.quickbite.restaurant.Restaurant r = restaurantRepository.findById(order.getRestaurantId()).orElse(null);
                 if (r != null) {
@@ -240,6 +253,25 @@ public class DeliveryService {
                 delivery.setOrderItemsSummary(summary);
             }
         }
+    }
+
+    @Transactional
+    public Delivery confirmCashCollection(Long deliveryId, Long driverId) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean isOperator = auth != null && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR"));
+
+        if (!isOperator && (driverId == null || !driverId.equals(delivery.getDriverId()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the assigned driver or operator can confirm cash collection");
+        }
+
+        if (paymentService != null) {
+            paymentService.confirmCashCollection(delivery.getOrderId(), driverId);
+        }
+        populateDeliveryDetails(delivery);
+        return delivery;
     }
 
     private void publishDeliveryEvent(Delivery delivery) {
