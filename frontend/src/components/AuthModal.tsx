@@ -5,6 +5,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "./Button";
 import Link from "next/link";
+import { getApiBaseUrl } from "@/lib/api";
 
 export function AuthModal({ isOpen, onClose, defaultView = "login" }: { isOpen: boolean; onClose: () => void; defaultView?: "login" | "signup" }) {
   const { login, signup } = useAuth();
@@ -65,7 +66,7 @@ export function AuthModal({ isOpen, onClose, defaultView = "login" }: { isOpen: 
 
   const googleLogin = () => {
     // redirect to backend OAuth2 endpoint
-    window.location.href = "http://localhost:8080/oauth2/authorization/google";
+    window.location.href = `${getApiBaseUrl()}/oauth2/authorization/google`;
   };
 
   const calculateStrength = (pass: string) => {

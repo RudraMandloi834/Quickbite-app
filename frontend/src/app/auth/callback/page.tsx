@@ -9,13 +9,32 @@ function CallbackHandler() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = searchParams.get("token");
+    let token: string | null = null;
+
+    // 1. Preferred secure approach: Extract token from URL fragment (never sent to servers)
+    if (typeof window !== "undefined" && window.location.hash) {
+      const hash = window.location.hash.startsWith("#")
+        ? window.location.hash.substring(1)
+        : window.location.hash;
+      const hashParams = new URLSearchParams(hash);
+      token = hashParams.get("token");
+    }
+
+    // 2. Backward compatibility fallback: Check query parameter if fragment is absent
+    if (!token) {
+      token = searchParams.get("token");
+    }
+
     if (token) {
+      // Immediately clear the fragment from browser URL / history to avoid leakage
+      if (typeof window !== "undefined" && window.history.replaceState) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
       setToken(token);
       // Wait a tick then reload to let AuthContext pick it up
       setTimeout(() => {
         window.location.assign("/");
-      }, 500);
+      }, 300);
     } else {
       router.push("/");
     }

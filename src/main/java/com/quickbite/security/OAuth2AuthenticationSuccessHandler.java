@@ -5,6 +5,7 @@ import com.quickbite.customer.CustomerRepository;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -21,6 +22,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     private final JwtService jwtService;
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.frontend.url:http://localhost:3000}")
+    private String frontendUrl;
 
     public OAuth2AuthenticationSuccessHandler(JwtService jwtService, CustomerRepository customerRepository, PasswordEncoder passwordEncoder) {
         this.jwtService = jwtService;
@@ -40,8 +44,8 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         });
 
         String token = jwtService.generateToken(customer.getEmail(), customer.getId(), customer.getRole());
-        String targetUrl = UriComponentsBuilder.fromUriString("http://localhost:3000/auth/callback")
-                .queryParam("token", token)
+        String targetUrl = UriComponentsBuilder.fromUriString(frontendUrl + "/auth/callback")
+                .fragment("token=" + token)
                 .build().toUriString();
 
         getRedirectStrategy().sendRedirect(request, response, targetUrl);

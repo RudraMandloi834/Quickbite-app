@@ -22,8 +22,6 @@ public class RazorpayClientWrapper {
         this.keySecret = keySecret;
         try {
             if (keyId != null && !keyId.isEmpty() && keySecret != null && !keySecret.isEmpty()) {
-                System.out.println("RAZORPAY_KEY_ID received: [" + keyId + "]");
-                System.out.println("RAZORPAY_KEY_SECRET received: [" + keySecret + "]");
                 this.client = new RazorpayClient(keyId, keySecret);
             }
         } catch (RazorpayException e) {

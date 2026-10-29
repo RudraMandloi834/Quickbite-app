@@ -1,6 +1,6 @@
-ALTER TABLE orders ALTER COLUMN status VARCHAR(255);
-ALTER TABLE order_status_history ALTER COLUMN new_status VARCHAR(255);
-ALTER TABLE order_status_history ALTER COLUMN previous_status VARCHAR(255);
+ALTER TABLE orders ALTER COLUMN status TYPE VARCHAR(255);
+ALTER TABLE order_status_history ALTER COLUMN new_status TYPE VARCHAR(255);
+ALTER TABLE order_status_history ALTER COLUMN previous_status TYPE VARCHAR(255);
 
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP(6) WITH TIME ZONE;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS preparing_at TIMESTAMP(6) WITH TIME ZONE;

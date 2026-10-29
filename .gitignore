@@ -12,3 +12,13 @@ frontend/.env.*
 .idea/
 .vscode/
 *.log
+
+# Local testing tokens
+*token*.txt
+
+# Local databases
+*.mv.db
+*.trace.db
+
+# Backup and temporary files
+*.orig
