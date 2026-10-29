@@ -15,7 +15,8 @@ export interface Page<T> {
 }
 
 export const getApiBaseUrl = (): string => {
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" && window.location.hostname !== "localhost" ? "" : "http://localhost:8080");
+  return url.replace(/\/+$/, "");
 };
 
 
@@ -420,7 +421,8 @@ export async function getAdminStats(): Promise<{ totalCustomers: number; totalRe
 }
 
 export const getWsBaseUrl = (): string => {
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const url = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" && window.location.hostname !== "localhost" ? "" : "http://localhost:8080");
+  return url.replace(/\/+$/, "");
 };
 
 
@@ -483,7 +485,11 @@ export async function rejectJoinRequest(requestId: number): Promise<RestaurantJo
 }
 
 export async function getCities(): Promise<string[]> {
-  const res = await authFetch(`${getApiBaseUrl()}/api/restaurants/cities`);
-  if (!res.ok) return [];
-  return res.json();
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/restaurants/cities`, { cache: "no-store" });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
 }

@@ -27,10 +27,11 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    const backendUrl = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080").replace(/\/+$/, "");
     return [
       {
         source: "/api/:path*",
-        destination: `${process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/:path*`,
+        destination: `${backendUrl}/api/:path*`,
       },
     ];
   },

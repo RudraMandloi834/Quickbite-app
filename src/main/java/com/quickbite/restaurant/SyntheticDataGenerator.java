@@ -22,7 +22,12 @@ public class SyntheticDataGenerator {
         this.menuItemRepository = menuItemRepository;
     }
 
-    private static final int TARGET_RESTAURANTS = 10000;
+    @org.springframework.beans.factory.annotation.Value("${quickbite.seed.target-restaurants:84}")
+    private int targetRestaurants = 10000;
+
+    public void setTargetRestaurants(int targetRestaurants) {
+        this.targetRestaurants = targetRestaurants;
+    }
 
     private static final String[] PREFIXES = {"Shree", "New", "Royal", "The Great", "Authentic", "Golden", "Grand", "Bombay", "Delhi", "Famous", "Original", "Pind", "Maha", "Desi", "Swad"};
     private static final String[] NOUNS = {"Spoon", "Bite", "Kitchen", "Diner", "Palace", "Bowl", "Platter", "Grill", "Bistro", "House", "Villa", "Rasoi", "Darbar", "Tandoor", "Zayka", "Bhavan", "Sweets", "Dhaba", "Eatery", "Spice"};
@@ -78,27 +83,22 @@ public class SyntheticDataGenerator {
 
     @Transactional
     public void generate() {
-        System.out.println("Executing Phase 3: High-Quality Indian Restaurant Data Generation...");
-        
-        // 1. Remove old dummy / demo / foreign data
-        cleanUpLegacyData();
-
         long currentCount = restaurantRepository.count();
-        if (currentCount >= TARGET_RESTAURANTS) {
-            System.out.println("Idempotency check passed: Database already contains " + currentCount + " restaurants.");
+        if (currentCount > 0) {
+            System.out.println("Idempotency check passed: Database already contains " + currentCount + " restaurants. Seeding skipped.");
             return; 
         }
 
-        long needed = TARGET_RESTAURANTS - currentCount;
-        System.out.println("Need to generate " + needed + " new restaurants to reach " + TARGET_RESTAURANTS);
+        System.out.println("Executing Indian Restaurant Demo Data Generation (target: " + targetRestaurants + ")...");
+        
+        long needed = targetRestaurants;
+        System.out.println("Need to generate " + needed + " new restaurants to reach " + targetRestaurants);
         
         List<Restaurant> restaurantBatch = new ArrayList<>();
         Random random = new Random(42); // Deterministic
 
-        List<String> validCityNames = Arrays.stream(CITIES).map(c -> c.name).toList();
-
         for (int i = 0; i < needed; i++) {
-            CityInfo city = CITIES[random.nextInt(CITIES.length)];
+            CityInfo city = CITIES[i % CITIES.length];
             String area = city.areas[random.nextInt(city.areas.length)];
             
             String name = PREFIXES[random.nextInt(PREFIXES.length)] + " " + NOUNS[random.nextInt(NOUNS.length)];
@@ -160,6 +160,10 @@ public class SyntheticDataGenerator {
         
         int removedCount = 0;
         for (Restaurant r : all) {
+            // Never delete restaurants created/owned by partners or users
+            if (r.getOwnerId() != null) {
+                continue;
+            }
             boolean isDemo = r.getName() != null && r.getName().contains("[Demo]");
             boolean isForeign = r.getCity() != null && !validCityNames.contains(r.getCity());
             boolean isFakeAddress = r.getAddress() != null && (r.getAddress().contains("123 Test St") || r.getAddress().contains("Downtown"));
