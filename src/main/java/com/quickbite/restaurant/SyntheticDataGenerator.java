@@ -2,31 +2,90 @@ package com.quickbite.restaurant;
 
 import com.quickbite.menu.MenuItem;
 import com.quickbite.menu.MenuItemRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 @Component
 public class SyntheticDataGenerator {
 
+    private static final Logger logger = LoggerFactory.getLogger(SyntheticDataGenerator.class);
+
     private final RestaurantRepository restaurantRepository;
     private final MenuItemRepository menuItemRepository;
+    private TransactionTemplate transactionTemplate;
+
+    @Value("${quickbite.seed.target-restaurants:10000}")
+    private int targetRestaurants = 10000;
+
+    @Value("${quickbite.seed.batch-size:1000}")
+    private int batchSize = 1000;
+
+    @Value("${quickbite.seed.async:true}")
+    private boolean async = true;
+
+    @Value("${quickbite.seed.enabled:true}")
+    private boolean enabled = true;
 
     public SyntheticDataGenerator(RestaurantRepository restaurantRepository, MenuItemRepository menuItemRepository) {
-        this.restaurantRepository = restaurantRepository;
-        this.menuItemRepository = menuItemRepository;
+        this(restaurantRepository, menuItemRepository, null);
     }
 
-    @org.springframework.beans.factory.annotation.Value("${quickbite.seed.target-restaurants:84}")
-    private int targetRestaurants = 10000;
+    @Autowired
+    public SyntheticDataGenerator(
+            RestaurantRepository restaurantRepository,
+            MenuItemRepository menuItemRepository,
+            @Autowired(required = false) TransactionTemplate transactionTemplate) {
+        this.restaurantRepository = restaurantRepository;
+        this.menuItemRepository = menuItemRepository;
+        this.transactionTemplate = transactionTemplate;
+    }
+
+    public void setTransactionTemplate(TransactionTemplate transactionTemplate) {
+        this.transactionTemplate = transactionTemplate;
+    }
 
     public void setTargetRestaurants(int targetRestaurants) {
         this.targetRestaurants = targetRestaurants;
+    }
+
+    public int getTargetRestaurants() {
+        return targetRestaurants;
+    }
+
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
+    }
+
+    public int getBatchSize() {
+        return batchSize;
+    }
+
+    public void setAsync(boolean async) {
+        this.async = async;
+    }
+
+    public boolean isAsync() {
+        return async;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
     }
 
     private static final String[] PREFIXES = {"Shree", "New", "Royal", "The Great", "Authentic", "Golden", "Grand", "Bombay", "Delhi", "Famous", "Original", "Pind", "Maha", "Desi", "Swad"};
@@ -81,24 +140,60 @@ public class SyntheticDataGenerator {
         new CityInfo("Rajkot", 22.3039, 70.8022, new String[]{"Kalawad Road", "Amin Marg", "Yagnik Road", "University Road", "Nana Mava", "Sadhu Vaswani Road", "Astron Chowk", "Gondal Road", "Mavdi", "Race Course"}),
     };
 
-    @Transactional
+    public void startSeeding() {
+        if (!enabled) {
+            logger.info("Database seeding is disabled (quickbite.seed.enabled=false).");
+            return;
+        }
+
+        long currentCount = restaurantRepository.count();
+        if (currentCount >= targetRestaurants) {
+            logger.info("Idempotency check passed: Database already contains {} restaurants (target: {}). Seeding skipped.", currentCount, targetRestaurants);
+            return;
+        }
+
+        if (async) {
+            logger.info("Launching background seeding: target={}, current={}, batchSize={}...", targetRestaurants, currentCount, batchSize);
+            CompletableFuture.runAsync(() -> {
+                try {
+                    generate();
+                } catch (Exception e) {
+                    logger.error("Error during background restaurant seeding: {}", e.getMessage(), e);
+                }
+            });
+        } else {
+            generate();
+        }
+    }
+
     public void generate() {
         long currentCount = restaurantRepository.count();
-        if (currentCount > 0) {
-            System.out.println("Idempotency check passed: Database already contains " + currentCount + " restaurants. Seeding skipped.");
+        if (currentCount >= targetRestaurants) {
+            logger.info("Idempotency check passed: Database already contains {} restaurants (target: {}). Seeding skipped.", currentCount, targetRestaurants);
             return; 
         }
 
-        System.out.println("Executing Indian Restaurant Demo Data Generation (target: " + targetRestaurants + ")...");
-        
-        long needed = targetRestaurants;
-        System.out.println("Need to generate " + needed + " new restaurants to reach " + targetRestaurants);
-        
-        List<Restaurant> restaurantBatch = new ArrayList<>();
-        Random random = new Random(42); // Deterministic
+        long needed = targetRestaurants - currentCount;
+        logger.info("Starting Indian Restaurant Demo Data Generation: target={}, current={}, needed={}, batchSize={}...",
+                targetRestaurants, currentCount, needed, batchSize);
 
-        for (int i = 0; i < needed; i++) {
-            CityInfo city = CITIES[i % CITIES.length];
+        // Load existing keys to guarantee idempotency and avoid duplicates
+        Set<String> existingKeys = new HashSet<>();
+        List<Restaurant> existing = restaurantRepository.findAll();
+        if (existing != null) {
+            for (Restaurant r : existing) {
+                existingKeys.add(toKey(r.getName(), r.getAddress(), r.getCity()));
+            }
+        }
+
+        List<Restaurant> restaurantBatch = new ArrayList<>();
+        Random random = new Random(42); // Deterministic pseudo-random seed
+        int newlyAddedCount = 0;
+        int candidateIndex = 0;
+        int maxAttempts = Math.max(targetRestaurants * 3, 30000);
+
+        while ((currentCount + newlyAddedCount) < targetRestaurants && candidateIndex < maxAttempts) {
+            CityInfo city = CITIES[candidateIndex % CITIES.length];
             String area = city.areas[random.nextInt(city.areas.length)];
             
             String name = PREFIXES[random.nextInt(PREFIXES.length)] + " " + NOUNS[random.nextInt(NOUNS.length)];
@@ -126,6 +221,13 @@ public class SyntheticDataGenerator {
                              
             String coverImageUrl = ImageConstants.RESTAURANT_IMAGES[random.nextInt(ImageConstants.RESTAURANT_IMAGES.length)];
             
+            candidateIndex++;
+
+            String key = toKey(name, address, city.name);
+            if (existingKeys.contains(key)) {
+                continue; // Skip already seeded or existing restaurant
+            }
+
             Restaurant r = new Restaurant(
                 name, cuisine, area, Math.round(rating * 10.0) / 10.0,
                 address, city.name, area, lat, lng, openingHours, Math.round(deliveryRadius * 10.0) / 10.0,
@@ -138,9 +240,11 @@ public class SyntheticDataGenerator {
             r.setDeliveryTimeMinutes(deliveryTimeMinutes);
             r.setStatus(RestaurantStatus.APPROVED);
             
+            existingKeys.add(key);
             restaurantBatch.add(r);
+            newlyAddedCount++;
             
-            if (restaurantBatch.size() >= 1000) {
+            if (restaurantBatch.size() >= batchSize) {
                 saveBatch(restaurantBatch, random);
                 restaurantBatch = new ArrayList<>();
             }
@@ -150,38 +254,18 @@ public class SyntheticDataGenerator {
             saveBatch(restaurantBatch, random);
         }
         
-        System.out.println("Successfully seeded Indian restaurants.");
-    }
-    
-    private void cleanUpLegacyData() {
-        System.out.println("Cleaning up old demo/foreign records safely...");
-        List<Restaurant> all = restaurantRepository.findAll();
-        List<String> validCityNames = Arrays.stream(CITIES).map(c -> c.name).toList();
-        
-        int removedCount = 0;
-        for (Restaurant r : all) {
-            // Never delete restaurants created/owned by partners or users
-            if (r.getOwnerId() != null) {
-                continue;
-            }
-            boolean isDemo = r.getName() != null && r.getName().contains("[Demo]");
-            boolean isForeign = r.getCity() != null && !validCityNames.contains(r.getCity());
-            boolean isFakeAddress = r.getAddress() != null && (r.getAddress().contains("123 Test St") || r.getAddress().contains("Downtown"));
-            boolean isOldArea = r.getArea() != null && r.getArea().equalsIgnoreCase("Downtown");
-            
-            if (isDemo || isForeign || isFakeAddress || isOldArea) {
-                // Remove menus first due to foreign key
-                List<MenuItem> menus = menuItemRepository.findByRestaurantId(r.getId());
-                menuItemRepository.deleteAll(menus);
-                
-                restaurantRepository.delete(r);
-                removedCount++;
-            }
-        }
-        System.out.println("Removed " + removedCount + " legacy/invalid restaurant records.");
+        logger.info("Successfully seeded {} new Indian restaurants. Total target reached: {}.", newlyAddedCount, (currentCount + newlyAddedCount));
     }
     
     private void saveBatch(List<Restaurant> batch, Random random) {
+        if (transactionTemplate != null) {
+            transactionTemplate.executeWithoutResult(status -> doSaveBatch(batch, random));
+        } else {
+            doSaveBatch(batch, random);
+        }
+    }
+
+    private void doSaveBatch(List<Restaurant> batch, Random random) {
         List<Restaurant> savedRestaurants = restaurantRepository.saveAll(batch);
         List<MenuItem> menus = new ArrayList<>();
         for (Restaurant r : savedRestaurants) {
@@ -196,6 +280,12 @@ public class SyntheticDataGenerator {
             }
         }
         menuItemRepository.saveAll(menus);
-        System.out.println("Saved batch of " + batch.size() + " restaurants and menus.");
+        logger.info("Committed batch of {} restaurants and {} menus.", batch.size(), menus.size());
+    }
+
+    private String toKey(String name, String address, String city) {
+        return (name != null ? name.trim().toLowerCase() : "") + "|"
+             + (address != null ? address.trim().toLowerCase() : "") + "|"
+             + (city != null ? city.trim().toLowerCase() : "");
     }
 }

@@ -1,10 +1,11 @@
 package com.quickbite.restaurant;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
-@org.springframework.core.annotation.Order(10)
+@Order(10)
 public class RestaurantDataInitializer implements CommandLineRunner {
 
     private final SyntheticDataGenerator syntheticDataGenerator;
@@ -15,6 +16,6 @@ public class RestaurantDataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        syntheticDataGenerator.generate();
+        syntheticDataGenerator.startSeeding();
     }
 }
