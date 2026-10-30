@@ -35,6 +35,11 @@ class DeliveryControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new DeliveryController(deliveryService, customerRepository)).build();
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     @Test
     void createsDeliveryWithCreatedStatus() throws Exception {
         when(deliveryService.createDeliveryForOrder(1L))

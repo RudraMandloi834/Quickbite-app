@@ -397,6 +397,46 @@ export const rejectRestaurant = async (restaurantId: number, reason: string): Pr
   return res.json();
 };
 
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+}
+
+export const getAdminUsers = async (): Promise<AdminUser[]> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/users`);
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+};
+
+export const updateAdminUserRole = async (userId: number, role: string): Promise<AdminUser> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/users/${userId}/role`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role })
+  });
+  if (!res.ok) throw new Error("Failed to update user role");
+  return res.json();
+};
+
+export const getAdminOrders = async (): Promise<Order[]> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/orders`);
+  if (!res.ok) throw new Error("Failed to fetch orders");
+  return res.json();
+};
+
+export const provisionTestAccounts = async (password: string = "dev123"): Promise<any> => {
+  const res = await authFetch(`${getApiBaseUrl()}/api/admin/provision-test-accounts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password })
+  });
+  if (!res.ok) throw new Error("Failed to provision test accounts");
+  return res.json();
+};
+
 
 
 export const getRestaurantDashboardSummary = async (restaurantId: number) => {

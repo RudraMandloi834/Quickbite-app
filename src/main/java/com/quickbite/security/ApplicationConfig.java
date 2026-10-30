@@ -25,13 +25,17 @@ public class ApplicationConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> customerRepository.findByEmail(username)
-                .map(customer -> new CustomUserDetails(
-                        customer.getEmail(),
-                        customer.getPassword() != null ? customer.getPassword() : "",
-                        Collections.singletonList(new org.springframework.security.core.authority.SimpleGrantedAuthority(customer.getRole())),
-                        customer.getId()))
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        return identifier -> {
+            String trimmed = identifier != null ? identifier.trim() : "";
+            return customerRepository.findByEmailIgnoreCase(trimmed)
+                    .or(() -> customerRepository.findByName(trimmed))
+                    .map(customer -> new CustomUserDetails(
+                            customer.getEmail(),
+                            customer.getPassword() != null ? customer.getPassword() : "",
+                            SecurityUtils.getAuthoritiesForRole(customer.getRole()),
+                            customer.getId()))
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found: " + trimmed));
+        };
     }
 
     @Bean

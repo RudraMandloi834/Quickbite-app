@@ -16,9 +16,11 @@ export default function RestaurantDashboard() {
 
   const [restaurantsList, setRestaurantsList] = useState<Restaurant[]>([]);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [loadingRestaurants, setLoadingRestaurants] = useState(true);
 
   useEffect(() => {
     if (user) {
+      setLoadingRestaurants(true);
       authFetch(`${getApiBaseUrl()}/api/restaurants/my-applications`)
         .then(res => res.json())
         .then((data: Restaurant[]) => {
@@ -29,7 +31,11 @@ export default function RestaurantDashboard() {
               setRestaurant(approved[0]);
             }
           }
-        });
+        })
+        .catch(() => {})
+        .finally(() => setLoadingRestaurants(false));
+    } else {
+      setLoadingRestaurants(false);
     }
   }, [user]);
 
@@ -84,12 +90,28 @@ export default function RestaurantDashboard() {
     }
   });
 
-  if (authLoading || (!restaurant && user)) return <div className="p-20 text-center text-stone-500 font-medium">Loading Dashboard...</div>;
-  if (!user || !user.roles?.includes("RESTAURANT_PARTNER")) {
-    return <div className="p-20 text-center text-red-500 font-bold">Access Denied.</div>;
+  const isOwner = user && (user.roles?.includes("RESTAURANT_PARTNER") || user.roles?.includes("RESTAURANT_OWNER") || user.roles?.includes("OPERATOR") || user.roles?.includes("ADMIN"));
+
+  if (authLoading || (loadingRestaurants && !restaurant)) return <div className="p-20 text-center text-stone-500 font-medium">Loading Dashboard...</div>;
+  if (!isOwner) {
+    return <div className="p-20 text-center text-red-500 font-bold">Access Denied. You must be a restaurant partner.</div>;
   }
   if (!restaurant) {
-    return <div className="p-20 text-center text-stone-500 font-medium">No approved restaurant found.</div>;
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center max-w-lg mx-auto">
+        <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <ChefHat className="w-8 h-8 text-amber-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-stone-900 mb-2">No Approved Restaurant Found</h2>
+        <p className="text-stone-500 mb-6">Your restaurant registration may be pending admin approval, or you have not registered a restaurant yet.</p>
+        <button 
+          onClick={() => router.push("/restaurant/register")} 
+          className="px-6 py-3 bg-brand-primary text-white font-bold rounded-xl hover:bg-brand-primary/90 transition-colors shadow-sm"
+        >
+          Register Restaurant
+        </button>
+      </div>
+    );
   }
 
   const newOrders = orders.filter((o: any) => o.status === 'PLACED');

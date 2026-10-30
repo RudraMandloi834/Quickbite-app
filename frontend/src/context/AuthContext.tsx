@@ -29,7 +29,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     /* eslint-disable-next-line react-hooks/set-state-in-effect */
     setUser(getUser());
     setLoading(false);
-  }, []);
+
+    const handleUnauthorized = () => {
+      removeToken();
+      setUser(null);
+      router.push("/login");
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("auth_unauthorized", handleUnauthorized);
+      return () => window.removeEventListener("auth_unauthorized", handleUnauthorized);
+    }
+  }, [router]);
 
   const login = useCallback(async (email: string, pass: string) => {
     removeToken();

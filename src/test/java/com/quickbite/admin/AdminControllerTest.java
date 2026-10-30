@@ -49,6 +49,11 @@ public class AdminControllerTest {
         );
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void operatorCanFetchAdminStats() {
         when(customerRepository.count()).thenReturn(10L);

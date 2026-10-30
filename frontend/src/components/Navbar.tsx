@@ -142,9 +142,10 @@ export function Navbar() {
   };
 
   const roles = user?.roles || [];
-  const isOperator = roles.includes("OPERATOR");
-  const isDriver = roles.includes("DRIVER");
-  const isCustomer = roles.includes("CUSTOMER") || (!isOperator && !isDriver);
+  const isOperator = roles.includes("OPERATOR") || roles.includes("ADMIN");
+  const isRestaurantPartner = roles.includes("RESTAURANT_PARTNER") || roles.includes("RESTAURANT_OWNER");
+  const isDriver = roles.includes("DRIVER") || roles.includes("DELIVERY_DRIVER");
+  const isCustomer = roles.includes("CUSTOMER") || (!isOperator && !isRestaurantPartner && !isDriver);
 
   const userInitial = user?.sub ? user.sub.charAt(0).toUpperCase() : "U";
   const displayName = user?.sub ? user.sub.split('@')[0] : "Account";
@@ -167,6 +168,12 @@ export function Navbar() {
               </Link>
             )}
 
+            {isRestaurantPartner && (
+              <Link href="/restaurant/dashboard" className="hover:text-brand-fg font-semibold text-brand-primary flex items-center gap-1.5">
+                <Store className="w-4 h-4" /> Restaurant Dashboard
+              </Link>
+            )}
+
             {isDriver && (
               <>
                 <Link href="/driver" className="hover:text-brand-fg font-semibold text-brand-secondary flex items-center gap-1.5">
@@ -176,7 +183,7 @@ export function Navbar() {
               </>
             )}
 
-            {isCustomer && !isOperator && !isDriver && (
+            {isCustomer && (
               <>
                 <Link href="/" className="hover:text-brand-fg py-2">Home</Link>
                 <Link href="/restaurants" className="hover:text-brand-fg py-2">Top Rated</Link>
@@ -187,7 +194,7 @@ export function Navbar() {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-5">
-            {isCustomer && !isOperator && !isDriver && (
+            {isCustomer && (
               <>
                 <Link href="/orders" className="text-sm font-medium text-brand-fg hover:text-brand-primary transition-colors">
                   Orders

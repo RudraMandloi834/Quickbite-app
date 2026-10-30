@@ -257,7 +257,10 @@ public class OrderService {
     public Order getOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        if (!order.getCustomerId().equals(SecurityUtils.getAuthenticatedCustomerId())) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean isOperator = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR") || a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isOperator && !order.getCustomerId().equals(SecurityUtils.getAuthenticatedCustomerId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
         order.setItems(orderItemRepository.findByOrderId(orderId));
@@ -271,7 +274,10 @@ public class OrderService {
     }
 
     public List<Order> getCustomerOrders(Long customerId) {
-        if (!customerId.equals(SecurityUtils.getAuthenticatedCustomerId())) {
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean isOperator = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR") || a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isOperator && !customerId.equals(SecurityUtils.getAuthenticatedCustomerId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
         List<Order> orders = orderRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);

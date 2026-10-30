@@ -62,11 +62,10 @@ export function normalizeRole(role: string): string {
 export function getDashboardRoute(user: AuthUser | null): string {
   if (!user) return "/";
   const roles = user.roles || [];
-  if (roles.includes("OPERATOR")) return "/admin/dashboard";
-  if (roles.includes("DRIVER")) return "/driver";
-  return "/"; // default customer home. Or if partner, they use /restaurant/dashboard manually or we redirect if they own one? 
-  // Wait, the prompt says: "CUSTOMER -> /discover or existing customer home. Restaurant owner with approved restaurant access -> /restaurant/dashboard"
-  // Since we can't trivially know if they have an approved restaurant just from the token (unless we fetch it), we'll let the user navigate or we add a helper later.
+  if (roles.includes("OPERATOR") || roles.includes("ADMIN")) return "/admin/dashboard";
+  if (roles.includes("RESTAURANT_PARTNER") || roles.includes("RESTAURANT_OWNER")) return "/restaurant/dashboard";
+  if (roles.includes("DRIVER") || roles.includes("DELIVERY_DRIVER")) return "/driver";
+  return "/";
 }
 
 export function getAuthHeaders(): Record<string, string> {

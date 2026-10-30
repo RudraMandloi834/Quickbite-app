@@ -1,5 +1,6 @@
 package com.quickbite.admin;
 
+import com.quickbite.auth.TestAccountProvisioningService;
 import com.quickbite.customer.Customer;
 import com.quickbite.customer.CustomerRepository;
 import com.quickbite.delivery.Delivery;
@@ -10,8 +11,10 @@ import com.quickbite.restaurant.Restaurant;
 import com.quickbite.restaurant.RestaurantRepository;
 import com.quickbite.restaurant.RestaurantService;
 import com.quickbite.restaurant.RestaurantStatus;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +23,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin")
-@PreAuthorize("hasRole('OPERATOR')")
+@PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
 public class AdminController {
 
     private final CustomerRepository customerRepository;
@@ -28,16 +31,26 @@ public class AdminController {
     private final OrderRepository orderRepository;
     private final DeliveryRepository deliveryRepository;
     private final RestaurantService restaurantService;
+    private final TestAccountProvisioningService provisioningService;
 
-    public AdminController(CustomerRepository customerRepository, RestaurantRepository restaurantRepository,
-                           OrderRepository orderRepository, DeliveryRepository deliveryRepository,
-                           RestaurantService restaurantService) {
+    public AdminController(
+            CustomerRepository customerRepository,
+            RestaurantRepository restaurantRepository,
+            OrderRepository orderRepository,
+            DeliveryRepository deliveryRepository,
+            RestaurantService restaurantService,
+            TestAccountProvisioningService provisioningService) {
         this.customerRepository = customerRepository;
         this.restaurantRepository = restaurantRepository;
         this.orderRepository = orderRepository;
         this.deliveryRepository = deliveryRepository;
         this.restaurantService = restaurantService;
+        this.provisioningService = provisioningService;
     }
+
+    public record UserSummaryDTO(Long id, String name, String email, String phone, String role) {}
+    public record UpdateRoleRequest(String role) {}
+    public record ProvisionAccountsRequest(String password) {}
 
     private RestaurantAdminDTO mapToDTO(Restaurant r) {
         Customer c = null;
@@ -59,6 +72,37 @@ public class AdminController {
         stats.put("totalOrders", orderRepository.count());
         stats.put("totalDeliveries", deliveryRepository.count());
         return stats;
+    }
+
+    @GetMapping("/users")
+    public List<UserSummaryDTO> getAllUsers() {
+        return customerRepository.findAll().stream()
+                .map(c -> new UserSummaryDTO(c.getId(), c.getName(), c.getEmail(), c.getPhone(), c.getRole()))
+                .collect(Collectors.toList());
+    }
+
+    @PatchMapping("/users/{id}/role")
+    public UserSummaryDTO updateUserRole(@PathVariable Long id, @RequestBody UpdateRoleRequest request) {
+        if (request == null || request.role() == null || request.role().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must not be blank");
+        }
+        Customer user = customerRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        String clean = request.role().trim().toUpperCase();
+        if (!clean.startsWith("ROLE_")) {
+            clean = "ROLE_" + clean;
+        }
+        user.setRole(clean);
+        Customer saved = customerRepository.save(user);
+        return new UserSummaryDTO(saved.getId(), saved.getName(), saved.getEmail(), saved.getPhone(), saved.getRole());
+    }
+
+    @PostMapping("/provision-test-accounts")
+    public Map<String, Object> provisionTestAccounts(@RequestBody(required = false) ProvisionAccountsRequest request) {
+        String pwd = (request != null && request.password() != null && !request.password().isBlank())
+                ? request.password().trim() : "dev123";
+        return provisioningService.provisionTestAccounts(pwd);
     }
 
     @GetMapping("/orders")

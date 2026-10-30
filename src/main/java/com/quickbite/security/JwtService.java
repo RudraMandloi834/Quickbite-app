@@ -31,11 +31,21 @@ public class JwtService {
         return claimsResolver.apply(claims);
     }
 
-    public String generateToken(String username, Long customerId, String role) {
+    public String generateToken(String username, Long customerId, String role, java.util.List<String> roles) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("customerId", customerId);
-        if (role != null) claims.put("roles", java.util.Collections.singletonList(role));
+        if (role != null) claims.put("role", role);
+        if (roles != null && !roles.isEmpty()) {
+            claims.put("roles", roles);
+        } else if (role != null) {
+            claims.put("roles", java.util.Collections.singletonList(role));
+        }
         return generateToken(claims, username);
+    }
+
+    public String generateToken(String username, Long customerId, String role) {
+        java.util.List<String> roles = SecurityUtils.getRoleNamesForRole(role);
+        return generateToken(username, customerId, role, roles);
     }
 
     public String generateToken(String username, Long customerId) {

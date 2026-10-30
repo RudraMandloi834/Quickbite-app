@@ -82,8 +82,10 @@ export default function DriverDashboardPage() {
     }
   });
 
+  const isDriver = user && (user.roles?.includes("DRIVER") || user.roles?.includes("DELIVERY_DRIVER") || user.roles?.includes("OPERATOR") || user.roles?.includes("ADMIN"));
+
   if (authLoading) return <div className="p-20 text-center text-stone-500 font-medium">Loading Dashboard...</div>;
-  if (!user || !user.roles?.includes("DRIVER")) {
+  if (!isDriver) {
     return <div className="p-20 text-center text-red-500 font-bold">Access Denied. You must be an approved driver.</div>;
   }
 
