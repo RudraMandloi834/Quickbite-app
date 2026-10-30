@@ -20,8 +20,8 @@ export function MobileNav() {
   ];
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-brand-border pb-safe z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-      <div className="flex justify-around items-center h-16">
+    <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-brand-border pb-[env(safe-area-inset-bottom,0px)] z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+      <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -38,6 +38,6 @@ export function MobileNav() {
           );
         })}
       </div>
-    </div>
+    </nav>
   );
 }

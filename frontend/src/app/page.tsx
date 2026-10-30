@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Container } from "@/components/Container";
 import { Button } from "@/components/Button";
 import { Card, CardContent } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Input } from "@/components/Input";
 import { Skeleton } from "@/components/Skeleton";
-import { getApiBaseUrl } from "@/lib/api";
+import { getApiBaseUrl, getCities } from "@/lib/api";
 import { Restaurant } from "@/types/restaurant";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
+import { getStoredLocation, setStoredLocation, INDIAN_CITIES, DEFAULT_CITY } from "@/lib/location";
 
 const CATEGORIES = [
   { name: "Burgers", icon: "🍔" },
@@ -31,26 +33,66 @@ const FEATURES = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const [selectedCity, setSelectedCity] = useState<string>(DEFAULT_CITY);
+  const [cityOptions, setCityOptions] = useState<string[]>([...INDIAN_CITIES]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [topRestaurants, setTopRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Initialize location from stored preference
+  useEffect(() => {
+    const loc = getStoredLocation();
+    if (loc.city) {
+      setSelectedCity(loc.city);
+    }
+    // Fetch live cities from backend, combine with Indian cities
+    getCities()
+      .then((cities) => {
+        if (cities && cities.length > 0) {
+          const unique = Array.from(new Set([...cities, ...INDIAN_CITIES])).filter(Boolean);
+          setCityOptions(unique);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleCityChange = (newCity: string) => {
+    setSelectedCity(newCity);
+    setStoredLocation(newCity);
+  };
+
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const params = new URLSearchParams();
+    if (selectedCity) params.set("city", selectedCity);
+    if (searchQuery.trim()) params.set("search", searchQuery.trim());
+    router.push(`/restaurants?${params.toString()}`);
+  };
 
   useEffect(() => {
     const fetchTopRestaurants = async () => {
       try {
         setIsLoading(true);
-        // Fetch a small limit of restaurants, e.g. using page=0 and size=4
-        const res = await fetch(`${getApiBaseUrl()}/api/restaurants?page=0&size=4`);
+        const cityParam = selectedCity ? `&city=${encodeURIComponent(selectedCity)}` : "";
+        const res = await fetch(`${getApiBaseUrl()}/api/restaurants?page=0&size=4${cityParam}`);
         if (!res.ok) throw new Error("Failed to fetch restaurants");
         const data = await res.json();
         
-        // Handle paginated responses (.content) or raw arrays
-        if (data && Array.isArray(data.content)) {
+        if (data && Array.isArray(data.content) && data.content.length > 0) {
           setTopRestaurants(data.content);
-        } else if (Array.isArray(data)) {
+        } else if (Array.isArray(data) && data.length > 0) {
           setTopRestaurants(data.slice(0, 4));
         } else {
-          setTopRestaurants([]);
+          // If no restaurants in chosen city, fetch general top-rated without city filter
+          const fallbackRes = await fetch(`${getApiBaseUrl()}/api/restaurants?page=0&size=4`);
+          if (fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            setTopRestaurants(fallbackData.content || (Array.isArray(fallbackData) ? fallbackData.slice(0, 4) : []));
+          } else {
+            setTopRestaurants([]);
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
@@ -60,7 +102,7 @@ export default function Home() {
     };
 
     fetchTopRestaurants();
-  }, []);
+  }, [selectedCity]);
 
   return (
     <div className="flex flex-col min-h-screen bg-brand-bg">
@@ -69,39 +111,52 @@ export default function Home() {
         <Container>
           <div className="flex flex-col lg:flex-row items-center gap-12">
             <div className="flex-1 space-y-8 z-10">
-              <h1 className="text-5xl lg:text-7xl font-sans font-bold text-brand-fg leading-[1.1]">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-primary/10 text-brand-primary text-xs font-bold tracking-wide">
+                <span>🇮🇳</span> Discover Authentic Indian Food Delivered Fast
+              </div>
+              <h1 className="text-4xl sm:text-5xl lg:text-7xl font-sans font-bold text-brand-fg leading-[1.1]">
                 QuickBite <span className="text-brand-primary block mt-2">Brings People Together</span>
               </h1>
-              <p className="text-lg text-brand-muted max-w-lg">
-                Discover the best restaurants near you and get your favorite food delivered fast.
+              <p className="text-base sm:text-lg text-brand-muted max-w-lg">
+                Explore the best local restaurants across India and get delicious meals delivered to your doorstep.
               </p>
               
               {/* Search & Location Bar */}
-              <div className="flex flex-col sm:flex-row gap-3 bg-white p-2 rounded-2xl shadow-card border border-brand-border/50 max-w-xl">
+              <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-3 bg-white p-2.5 rounded-2xl shadow-card border border-brand-border/60 max-w-xl">
                 <div className="flex-1 relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-primary">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-primary pointer-events-none">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                   </span>
-                  <select className="w-full h-12 pl-12 pr-4 bg-transparent border-none outline-none text-brand-fg appearance-none cursor-pointer focus:ring-0">
-                    <option>New York</option>
-                    <option>San Francisco</option>
-                    <option>Chicago</option>
-                    <option>Austin</option>
+                  <select 
+                    value={selectedCity}
+                    onChange={(e) => handleCityChange(e.target.value)}
+                    className="w-full h-12 pl-12 pr-6 bg-transparent border-none outline-none text-brand-fg font-semibold text-sm appearance-none cursor-pointer focus:ring-0"
+                    aria-label="Select Indian City"
+                  >
+                    {cityOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}, India
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <div className="hidden sm:block w-px bg-brand-border/50 my-2"></div>
+                <div className="hidden sm:block w-px bg-brand-border/60 my-2"></div>
                 <div className="flex-[2] relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                   </span>
                   <Input 
                     type="text" 
-                    placeholder="Search for restaurants, cuisines..." 
-                    className="w-full h-12 pl-12 pr-4 border-none shadow-none focus:ring-0 rounded-xl"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search dishes, restaurants, cuisines..." 
+                    className="w-full h-12 pl-12 pr-4 border-none shadow-none focus:ring-0 rounded-xl text-sm"
                   />
                 </div>
-                <Button size="md" className="w-full sm:w-auto px-8 shrink-0">Search</Button>
-              </div>
+                <Button type="submit" size="md" className="w-full sm:w-auto px-7 shrink-0 font-bold">
+                  Search
+                </Button>
+              </form>
             </div>
             
             <div className="flex-1 relative flex justify-center lg:justify-end">

@@ -106,8 +106,34 @@ export async function authFetch(url: string, options: RequestInit = {}) {
     throw new ApiError("Forbidden", res.status);
   }
   if (!res.ok) {
-    const errorText = await res.text().catch(() => "");
-    throw new ApiError(`Request failed: ${res.statusText} - ${errorText}`, res.status);
+    let friendlyMessage = res.statusText || "Request failed";
+    try {
+      const errorText = await res.text();
+      if (errorText) {
+        try {
+          const parsed = JSON.parse(errorText);
+          if (parsed && typeof parsed === "object") {
+            if (typeof parsed.message === "string" && parsed.message.trim()) {
+              friendlyMessage = parsed.message.trim();
+            } else if (typeof parsed.error === "string" && parsed.error.trim()) {
+              friendlyMessage = parsed.error.trim();
+            }
+          }
+        } catch {
+          if (errorText.length < 200 && !errorText.includes("<html")) {
+            friendlyMessage = errorText;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      if (!friendlyMessage || friendlyMessage === res.statusText) {
+        friendlyMessage = "Server is temporarily unavailable or waking up. Please try again shortly.";
+      }
+    }
+    throw new ApiError(friendlyMessage, res.status);
   }
   return res;
 }

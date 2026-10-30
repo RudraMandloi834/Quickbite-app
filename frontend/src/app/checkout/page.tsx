@@ -63,20 +63,21 @@ export default function CheckoutPage() {
     return () => { ignore = true; };
   }, [user, authLoading, router]);
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrderWithMethod = async (overrideMethod?: string) => {
     if (isSubmittingRef.current) return;
     if (!rawCart) {
       setError("Please select a customer and ensure cart is not empty");
       return;
     }
 
+    const currentMethod = overrideMethod || paymentMethod;
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
     setPaymentErrorReason(null);
 
     try {
-      if (paymentMethod === 'cod') {
+      if (currentMethod === 'cod') {
         let orderId = pendingOrderId;
         if (!orderId) {
           const order = await createOrderFromCart(rawCart.id, "COD");
@@ -84,36 +85,47 @@ export default function CheckoutPage() {
           setPendingOrderId(order.id);
         }
         clearStoredCartId();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("quickbite_cart_updated"));
+        }
         router.push(`/orders/${orderId}?success=true`);
-        return;
-      }
-
-      const res = await loadRazorpay();
-
-      if (!res || typeof (window as unknown as { Razorpay?: Function }).Razorpay !== "function") {
-        setError("Razorpay SDK failed to load. Are you online? If you have an adblocker, try disabling it for this page.");
-        setIsSubmitting(false);
-        isSubmittingRef.current = false;
         return;
       }
 
       let orderIdToPay = pendingOrderId;
       if (!orderIdToPay) {
-        const order = await createOrderFromCart(rawCart.id, paymentMethod === 'upi' ? "UPI" : "CARD");
+        const order = await createOrderFromCart(rawCart.id, currentMethod === 'upi' ? "UPI" : "CARD");
         orderIdToPay = order.id;
         setPendingOrderId(order.id);
       }
 
-      const initResponse = await createRazorpayOrder(orderIdToPay);
+      let initResponse;
+      try {
+        initResponse = await createRazorpayOrder(orderIdToPay);
+      } catch (err: unknown) {
+        const msg = (err as Error).message || "";
+        if (msg.includes("not configured") || msg.includes("unavailable") || msg.includes("503")) {
+          setPaymentErrorReason("Online payments are currently not configured. Please use Cash on Delivery (COD) to place your order.");
+        } else {
+          setPaymentErrorReason(msg || "Failed to initiate online payment.");
+        }
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+        return;
+      }
 
-      if (initResponse.razorpayKeyId === "dummy-key-id" || initResponse.razorpayKeyId.includes("dev") || initResponse.razorpayKeyId.includes("dummy")) {
-        await verifyPayment({
-          razorpayPaymentId: "dev_success",
-          razorpayOrderId: initResponse.razorpayOrderId,
-          razorpaySignature: "dev_signature",
-        });
-        clearStoredCartId();
-        router.push(`/orders/${orderIdToPay}?success=true`);
+      if (!initResponse || !initResponse.razorpayKeyId || initResponse.razorpayKeyId.includes("dummy") || initResponse.razorpayKeyId.includes("dev")) {
+        setPaymentErrorReason("Online payment gateway is not configured with production credentials. Please choose Cash on Delivery (COD) to complete your order.");
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+        return;
+      }
+
+      const res = await loadRazorpay();
+      if (!res || typeof (window as unknown as { Razorpay?: Function }).Razorpay !== "function") {
+        setPaymentErrorReason("Razorpay SDK could not be loaded. Please disable any ad blockers or select Cash on Delivery.");
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
         return;
       }
 
@@ -132,6 +144,9 @@ export default function CheckoutPage() {
               razorpaySignature: response.razorpay_signature,
             });
             clearStoredCartId();
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("quickbite_cart_updated"));
+            }
             router.push(`/orders/${orderIdToPay}?success=true`);
           } catch (err: unknown) {
             setPaymentErrorReason((err as Error).message || "Payment verification failed on the server.");
@@ -141,28 +156,30 @@ export default function CheckoutPage() {
         },
         modal: {
           ondismiss: function () {
-            setPaymentErrorReason("Payment was cancelled or modal was closed.");
+            setPaymentErrorReason("Payment modal was closed. You can retry or switch to Cash on Delivery.");
             setIsSubmitting(false);
             isSubmittingRef.current = false;
           },
         },
-        theme: { color: "#F97316" },
+        theme: { color: "#0D9488" },
       };
 
       const razorpay = new (window as unknown as { Razorpay: any }).Razorpay(options);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       razorpay.on("payment.failed", function (response: any) {
-        setPaymentErrorReason(response.error.description);
+        setPaymentErrorReason(response.error?.description || "Payment failed at gateway.");
         setIsSubmitting(false);
         isSubmittingRef.current = false;
       });
       razorpay.open();
     } catch (err: unknown) {
-      setPaymentErrorReason((err as Error).message || "An error occurred during payment initiation.");
+      setPaymentErrorReason((err as Error).message || "An error occurred during order processing.");
       setIsSubmitting(false);
       isSubmittingRef.current = false;
     }
   };
+
+  const handlePlaceOrder = () => handlePlaceOrderWithMethod();
 
   if (authLoading || isLoading) {
     return (
@@ -201,14 +218,41 @@ export default function CheckoutPage() {
         {error ? (
           <div className="bg-red-50 text-red-700 p-6 rounded-2xl border border-red-100 font-medium">{error}</div>
         ) : paymentErrorReason ? (
-          <div className="bg-white rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-sm border border-stone-100 max-w-lg mx-auto">
-            <AlertCircle className="w-16 h-16 text-red-400 mb-4" />
-            <h2 className="text-2xl font-bold text-stone-900 mb-2">Payment Failed</h2>
-            <p className="text-stone-500 mb-8">{paymentErrorReason}</p>
-            <div className="flex gap-4 w-full">
-              <Button onClick={() => handlePlaceOrder()} variant="primary" className="flex-1 font-bold">Try Again</Button>
-              <Button href="/cart" variant="outline" className="flex-1 font-bold">Back to Cart</Button>
+          <div className="bg-white rounded-2xl p-8 sm:p-10 flex flex-col items-center justify-center text-center shadow-sm border border-stone-100 max-w-lg mx-auto">
+            <AlertCircle className="w-14 h-14 text-amber-500 mb-4" />
+            <h2 className="text-2xl font-bold text-stone-900 mb-2">Order Notice</h2>
+            <p className="text-stone-600 mb-6 text-sm sm:text-base leading-relaxed">{paymentErrorReason}</p>
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <Button
+                onClick={() => {
+                  setPaymentMethod('cod');
+                  setPaymentErrorReason(null);
+                  isSubmittingRef.current = false;
+                  setIsSubmitting(false);
+                  setTimeout(() => {
+                    handlePlaceOrderWithMethod('cod');
+                  }, 50);
+                }}
+                variant="primary"
+                className="flex-1 font-bold bg-brand-primary"
+              >
+                Place with COD (Cash on Delivery)
+              </Button>
+              <Button
+                onClick={() => {
+                  setPaymentErrorReason(null);
+                  isSubmittingRef.current = false;
+                  setIsSubmitting(false);
+                }}
+                variant="outline"
+                className="flex-1 font-bold"
+              >
+                Change Options
+              </Button>
             </div>
+            <Link href="/cart" className="mt-4 text-xs font-semibold text-stone-500 hover:text-stone-800 transition-colors">
+              Return to Cart
+            </Link>
           </div>
         ) : !cartDisplay || cartDisplay.items.length === 0 ? (
           <div className="bg-white rounded-2xl p-16 text-center shadow-sm border border-stone-100 max-w-2xl mx-auto">

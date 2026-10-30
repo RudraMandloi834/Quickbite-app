@@ -59,25 +59,13 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order has already been paid");
         }
 
-        String[] profiles = environment.getActiveProfiles();
-        boolean isDev = profiles != null && java.util.Arrays.asList(profiles).contains("dev");
-        if (isDev && (razorpayClient.getKeyId().contains("dummy") || razorpayClient.getKeyId().contains("dev"))) {
-            String devRazorpayOrderId = "dev_order_" + orderId + "_" + System.currentTimeMillis();
-            Payment payment = paymentRepository.save(new Payment(
-                    orderId,
-                    order.getTotalAmount(),
-                    devRazorpayOrderId,
-                    PaymentStatus.PENDING
-            ));
-            return new PaymentInitiationResponse(
-                    payment.getId(),
-                    order.getId(),
-                    devRazorpayOrderId,
-                    order.getTotalAmount(),
-                    "INR",
-                    razorpayClient.getKeyId()
+        if (!razorpayClient.isConfigured()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Online payment gateway (Razorpay) is currently not configured. Please use Cash on Delivery (COD) to place your order."
             );
         }
+
         try {
             JSONObject orderRequest = new JSONObject();
             int amountInPaise = order.getTotalAmount().multiply(new BigDecimal(100)).intValue();
@@ -122,20 +110,18 @@ public class PaymentService {
             return payment;
         }
 
-        String[] profiles = environment.getActiveProfiles();
-        boolean isDev = profiles != null && Arrays.asList(profiles).contains("dev");
-        if (isDev && "dev_signature".equals(request.getRazorpaySignature())) {
-            // Dev bypass
-        } else {
-            boolean isValid = razorpayClient.verifySignature(
-                payment.getRazorpayOrderId(),
-                request.getRazorpayPaymentId(),
-                request.getRazorpaySignature()
-            );
+        if (!razorpayClient.isConfigured()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Online payment gateway is not configured");
+        }
 
-            if (!isValid) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment signature");
-            }
+        boolean isValid = razorpayClient.verifySignature(
+            payment.getRazorpayOrderId(),
+            request.getRazorpayPaymentId(),
+            request.getRazorpaySignature()
+        );
+
+        if (!isValid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment signature");
         }
 
         payment.setRazorpayPaymentId(request.getRazorpayPaymentId());

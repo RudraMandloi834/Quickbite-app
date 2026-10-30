@@ -11,6 +11,7 @@ import { Button } from "@/components/Button";
 import { Skeleton } from "@/components/Skeleton";
 import { ImageWithFallback } from "@/components/ImageWithFallback";
 import { getRestaurants, getNearbyRestaurants, getCities, Page } from "@/lib/api";
+import { getStoredLocation, setStoredLocation, INDIAN_CITIES, DEFAULT_CITY } from "@/lib/location";
 import { Navigation } from "lucide-react";
 import { Restaurant } from "@/types/restaurant";
 import { MapPin, Search, Star, Clock, Heart, SlidersHorizontal, ChevronLeft, ChevronRight, X, AlertCircle } from "lucide-react";
@@ -66,14 +67,19 @@ function RestaurantsContent() {
   const [radius, setRadius] = useState(searchParams.get("radius") || "20");
   
   // Location States
-  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [availableCities, setAvailableCities] = useState<string[]>([...INDIAN_CITIES]);
   const [citySearch, setCitySearch] = useState("");
   const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
 
   useEffect(() => {
-    getCities().then(cities => setAvailableCities(cities)).catch(() => {});
+    getCities().then(cities => {
+      if (cities && cities.length > 0) {
+        const unique = Array.from(new Set([...cities, ...INDIAN_CITIES])).filter(Boolean);
+        setAvailableCities(unique);
+      }
+    }).catch(() => {});
   }, []);
   
   // Mobile filters open state
@@ -145,6 +151,7 @@ function RestaurantsContent() {
   };
 
   const handleCitySelect = (selectedCity: string) => {
+    setStoredLocation(selectedCity);
     updateFilters({
       city: selectedCity,
       isNearby: null,
@@ -495,14 +502,27 @@ function RestaurantsContent() {
             )}
 
             {!loading && !error && data && data.content.length === 0 && (
-              <div className="bg-white border border-stone-100 rounded-2xl p-12 flex flex-col items-center justify-center text-center shadow-sm">
+              <div className="bg-white border border-stone-100 rounded-2xl p-10 sm:p-12 flex flex-col items-center justify-center text-center shadow-sm">
                 <div className="w-20 h-20 bg-stone-50 rounded-full flex items-center justify-center mb-4">
                   <Search className="w-10 h-10 text-stone-300" />
                 </div>
-                <h3 className="text-xl font-bold text-stone-800 mb-2">{isNearby ? 'No restaurants found nearby' : 'No restaurants found'}</h3>
-                <p className="text-stone-500 max-w-md mx-auto mb-6">
-                  We couldn&apos;t find any restaurants matching your current filters. Try adjusting your search or location.
+                <h3 className="text-xl font-bold text-stone-800 mb-2">
+                  {city ? `No restaurants found in ${city}` : (isNearby ? 'No restaurants found nearby' : 'No restaurants found')}
+                </h3>
+                <p className="text-stone-500 max-w-md mx-auto mb-6 text-sm">
+                  We couldn&apos;t find restaurants matching your selection. Try exploring popular Indian culinary hubs:
                 </p>
+                <div className="flex flex-wrap gap-2 justify-center mb-6">
+                  {['Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad'].map((quickCity) => (
+                    <button
+                      key={quickCity}
+                      onClick={() => handleCitySelect(quickCity)}
+                      className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-stone-100 hover:bg-brand-primary/10 hover:text-brand-primary text-stone-700 transition-colors"
+                    >
+                      {quickCity}
+                    </button>
+                  ))}
+                </div>
                 <Button onClick={() => router.push(pathname)} variant="outline">Clear All Filters</Button>
               </div>
             )}

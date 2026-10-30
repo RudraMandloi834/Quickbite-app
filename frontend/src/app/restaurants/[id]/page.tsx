@@ -244,7 +244,7 @@ export default function RestaurantDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 pb-20 pt-16">
+    <div className="min-h-screen bg-stone-50 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-20 pt-16">
       {/* Cover Image Banner */}
       <div className="h-48 sm:h-72 w-full relative bg-stone-900">
         <ImageWithFallback
@@ -464,15 +464,22 @@ export default function RestaurantDetailsPage() {
 
       {/* Cart Toast Notification */}
       {cartToast && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-stone-900 text-white p-4 rounded-xl shadow-2xl flex items-center justify-between gap-4 animate-in slide-in-from-bottom-5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shrink-0">
-              <Check className="w-5 h-5 text-white" />
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-[60] bg-stone-900/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl border border-stone-800 flex items-center justify-between gap-4 animate-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 bg-brand-primary rounded-full flex items-center justify-center shrink-0 shadow-sm">
+              <Check className="w-4 h-4 text-white" />
             </div>
-            <p className="font-medium text-sm">{cartToast.message}</p>
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate">{cartToast.message}</p>
+              {cartToast.subtext && <p className="text-xs text-stone-400 truncate">{cartToast.subtext}</p>}
+            </div>
           </div>
-          <Link href="/cart" className="shrink-0 px-3.5 py-1.5 bg-brand-primary text-white rounded-md text-sm font-bold hover:bg-brand-primary/90 transition-colors">
-            View
+          <Link
+            href="/cart"
+            className="shrink-0 px-4 py-2 bg-brand-primary text-white rounded-xl text-sm font-bold hover:bg-brand-primary/90 transition-colors shadow-sm flex items-center gap-1.5"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>View Cart</span>
           </Link>
         </div>
       )}
